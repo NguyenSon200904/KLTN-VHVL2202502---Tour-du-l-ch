@@ -68,6 +68,21 @@ function scrollDest(direction) {
   container.scrollBy({ left: direction * 220, behavior: 'smooth' })
 }
 
+// ===== WISHLIST IDs cache =====
+let _wishlistIds = new Set()
+
+async function loadWishlistIds() {
+  try {
+    const token = localStorage.getItem('vt_access_token')
+    if (!token) return
+    const res = await apiGetWishlist()
+    if (res && res.ok) {
+      const tours = res.data?.result?.tours || []
+      _wishlistIds = new Set(tours.map(t => t._id))
+    }
+  } catch (e) { }
+}
+
 // ===== LOAD TOURS =====
 async function loadTours() {
   const grid = document.getElementById('tourGrid')
@@ -117,7 +132,7 @@ function renderTours(tours) {
       <div class="tour-img">
         <div class="tour-img-inner" style="background:url('${img}') center/cover no-repeat;${!img ? 'background:linear-gradient(135deg,#2d8a4e,#3aaa62)' : ''}"></div>
         ${badge ? `<span class="tour-badge">${badge}</span>` : ''}
-        <button class="tour-wishlist" onclick="event.stopPropagation();handleWishlist(this,'${tour._id}')" title="Yêu thích">♡</button>
+        <button class="tour-wishlist ${_wishlistIds.has(tour._id) ? 'liked' : ''}" onclick="event.stopPropagation();handleWishlist(this,'${tour._id}')" title="Yêu thích">${_wishlistIds.has(tour._id) ? '♥' : '♡'}</button>
       </div>
       <div class="tour-body">
         <div class="tour-stars">
@@ -139,14 +154,19 @@ function renderTours(tours) {
   }).join('')
 }
 
+  } catch (e) { }
+}
+
 // ===== WISHLIST =====
 async function handleWishlist(btn, tourId) {
   try {
     const res = await apiToggleWishlist(tourId)
-    if (res.ok) {
+    if (res && res.ok) {
       const added = res.data?.result?.added
       btn.textContent = added ? '♥' : '♡'
       btn.classList.toggle('liked', added)
+      if (added) _wishlistIds.add(tourId)
+      else _wishlistIds.delete(tourId)
     }
   } catch (e) { }
 }

@@ -558,3 +558,89 @@ if (_origSwitchTabCp2) {
     }
   };
 }
+// ============================================================
+// WISHLIST — Cá nhân hóa theo hành vi người dùng
+// ============================================================
+
+async function cpRenderWishlist() {
+  const grid = document.getElementById('cpWishlistGrid')
+  const empty = document.getElementById('cpWishlistEmpty')
+  if (!grid) return
+
+  // Loading state
+  grid.innerHTML = '<p style="color:var(--muted);font-size:0.875rem;padding:20px 0">Đang tải danh sách yêu thích...</p>'
+  if (empty) empty.style.display = 'none'
+
+  try {
+    const res = await apiGetWishlist()
+    if (!res || !res.ok) {
+      grid.innerHTML = '<p style="color:#e55;font-size:0.875rem">Không thể tải wishlist</p>'
+      return
+    }
+
+    const tours = res.data?.result?.tours || res.data?.result || []
+
+    if (!tours.length) {
+      grid.innerHTML = ''
+      if (empty) empty.style.display = 'block'
+      return
+    }
+
+    if (empty) empty.style.display = 'none'
+
+    grid.innerHTML = tours.map(tour => {
+      const img = tour.images?.[0] || ''
+      const name = tour.name || '—'
+      const loc = tour.destination || '—'
+      const days = tour.duration_days || 0
+      const nights = tour.duration_nights || 0
+      const price = tour.schedules?.[0]?.price_adult
+        ? tour.schedules[0].price_adult.toLocaleString('vi-VN') + 'đ'
+        : (tour.min_price ? tour.min_price.toLocaleString('vi-VN') + 'đ' : '—')
+      const slug = tour.slug || tour._id || ''
+      const badge = days ? `${days}N${nights}Đ` : ''
+
+      return `
+      <div class="cp-tour-card" style="
+        background:#fff;border-radius:12px;overflow:hidden;
+        box-shadow:0 2px 12px rgba(0,0,0,0.07);
+        transition:transform .25s,box-shadow .25s;cursor:pointer;
+      " onclick="window.location.href='chi-tiet-tour.html?slug=${slug}'"
+         onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 8px 28px rgba(0,0,0,0.12)'"
+         onmouseout="this.style.transform='';this.style.boxShadow='0 2px 12px rgba(0,0,0,0.07)'">
+        <div style="height:160px;position:relative;overflow:hidden;">
+          <div style="width:100%;height:100%;background:url('${img}') center/cover no-repeat${!img ? ';background:linear-gradient(135deg,#2d8a4e,#3aaa62)' : ''}"></div>
+          ${badge ? `<span style="position:absolute;top:8px;left:8px;background:rgba(0,0,0,0.55);color:#fff;font-size:0.65rem;font-weight:600;padding:3px 9px;border-radius:20px">${badge}</span>` : ''}
+          <button onclick="event.stopPropagation();cpRemoveWishlist(this,'${tour._id}')"
+            style="position:absolute;top:8px;right:8px;width:28px;height:28px;background:rgba(255,255,255,0.9);border-radius:50%;border:none;cursor:pointer;font-size:0.9rem;display:flex;align-items:center;justify-content:center;color:#e55"
+            title="Xóa khỏi yêu thích">♥</button>
+        </div>
+        <div style="padding:12px 14px 14px">
+          <div style="font-weight:700;font-size:0.9rem;color:var(--dark);margin-bottom:4px;line-height:1.35">${name}</div>
+          <div style="font-size:0.78rem;color:var(--muted);margin-bottom:10px">📍 ${loc}</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding-top:8px;border-top:1px solid #f0f0f0">
+            <div style="font-size:0.95rem;font-weight:700;color:var(--dark)">${price}</div>
+            <button onclick="event.stopPropagation();window.location.href='dat-tour.html?tour=${slug}'"
+              style="background:var(--green);color:#fff;border:none;padding:7px 14px;border-radius:8px;font-size:0.78rem;font-weight:700;cursor:pointer">
+              Đặt ngay
+            </button>
+          </div>
+        </div>
+      </div>`
+    }).join('')
+
+  } catch (e) {
+    console.error('cpRenderWishlist:', e)
+    grid.innerHTML = '<p style="color:#e55;font-size:0.875rem">Lỗi tải danh sách yêu thích</p>'
+  }
+}
+
+async function cpRemoveWishlist(btn, tourId) {
+  try {
+    const res = await apiToggleWishlist(tourId)
+    if (res && res.ok) {
+      if (typeof showToast === 'function') showToast('Đã xóa khỏi danh sách yêu thích')
+      cpRenderWishlist() // reload lại
+    }
+  } catch (e) { }
+}
