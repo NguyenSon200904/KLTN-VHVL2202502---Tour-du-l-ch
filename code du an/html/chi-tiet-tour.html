@@ -266,6 +266,12 @@
           tourData = result?.tour || result
           schedules = result?.schedules || []
 
+          // Gọi riêng apiGetSchedules nếu chưa có lịch
+          if (!schedules.length && tourData?._id) {
+            const sRes = await apiGetSchedules(tourData._id)
+            if (sRes && sRes.ok) schedules = sRes.data?.result?.schedules || []
+          }
+
           renderTour()
           renderSchedules()
 
