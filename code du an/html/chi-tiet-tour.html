@@ -275,6 +275,18 @@
           renderTour()
           renderSchedules()
 
+          // REAL-TIME TRIGGER: Lưu flag "vừa xem tour"
+          localStorage.setItem('vt_just_viewed_tour', tourData?._id || '1')
+          // Lưu lịch sử xem local (View Logs)
+          try {
+            var viewHistory = JSON.parse(localStorage.getItem('vt_view_history') || '[]')
+            var tourId = tourData?._id || ''
+            if (tourId && !viewHistory.includes(tourId)) {
+              viewHistory.unshift(tourId)
+              localStorage.setItem('vt_view_history', JSON.stringify(viewHistory.slice(0, 20)))
+            }
+          } catch (e) { }
+
           document.getElementById('ctLoading').style.display = 'none'
           document.getElementById('ctMain').style.display = 'block'
 

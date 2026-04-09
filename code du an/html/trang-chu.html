@@ -358,7 +358,16 @@
       <script src="../js/booking.js"></script>
       <script src="../js/favouites.js"></script>
       <script>
-        window.addEventListener('DOMContentLoaded', () => {
+        window.addEventListener('DOMContentLoaded', async () => {
+          // =============================================
+          // REAL-TIME TRIGGER: Reload gợi ý nếu vừa xem tour
+          // =============================================
+          var justViewedTour = localStorage.getItem('vt_just_viewed_tour');
+          if (justViewedTour) {
+            localStorage.removeItem('vt_just_viewed_tour');
+            // Force reload gợi ý ngay lập tức
+            if (typeof loadWishlistIds === 'function') await loadWishlistIds();
+          }
           // Gọi API
           if (typeof loadTours === 'function') loadTours();
           if (typeof loadCategories === 'function') loadCategories();
@@ -368,20 +377,12 @@
             renderTours(getActiveTours().slice(0, 6), 'tourGrid');
           }
 
-          // Gợi ý cá nhân hóa
-          setTimeout(function () {
-            var u = loadUser();
-            if (u) {
-              var recTours = recGetTours(4);
-              if (recTours.length) {
-                document.getElementById('recSection').style.display = 'block';
-                if (typeof initRecommendSection === 'function') initRecommendSection();
-                recRender('recGrid');
-                var name = u.name ? u.name.split(' ').slice(-1)[0] : '';
-                if (name) document.getElementById('recSubtitle').textContent = 'Dựa trên sở thích của ' + name;
-              }
-            }
-          }, 300);
+          // =============================================
+          // GỢI Ý CÁ NHÂN HÓA (cập nhật mỗi lần load)
+          // =============================================
+          if (typeof initRecommendSection === 'function') {
+            initRecommendSection();
+          }
           document.querySelectorAll('.dest-card').forEach((el, i) => {
             el.style.opacity = '0'; el.style.transform = 'translateY(20px)';
             el.style.transition = `opacity .5s ease ${i * 60}ms, transform .5s ease ${i * 60}ms`;
