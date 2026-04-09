@@ -31,7 +31,7 @@
 
   <ul class="nav-links">
     <li><a href="trang-chu.html">Điểm đến</a></li>
-    <li><a href="tour-du-lich.html">Tour du lịch</a></li>
+    <li><a href="tour-du-lich.html">Tour Du Lịch</a></li>
     <li><a href="uu-dai.html">Ưu đãi</a></li>
     <li><a href="ve-chung-toi.html">Về chúng tôi</a></li>
   </ul>
@@ -58,9 +58,12 @@
           <div class="user-dropdown-email" id="dropEmail">—</div>
         </div>
 
-        <a class="user-dropdown-item" href="ca-nhan.html">Hồ sơ cá nhân</a>
+        <a class="user-dropdown-item" href="ca-nhan.html">👤 Hồ sơ cá nhân</a>
+        <a class="user-dropdown-item" href="ca-nhan.html?tab=history">📋 Lịch sử đặt tour</a>
+        <a class="user-dropdown-item" href="ca-nhan.html?tab=promotions">❤️ Tour yêu thích</a>
         <a class="user-dropdown-item" id="adminMenuBtn" href="admin.html" style="display:none">⚙️ Quản trị Admin</a>
-        <a class="user-dropdown-item logout-item" onclick="doLogout()">Đăng xuất</a>
+        <a class="user-dropdown-item" id="staffMenuBtn" href="nhan-vien.html" style="display:none">🗂️ Quản lý đơn hàng</a>
+        <a class="user-dropdown-item logout-item" onclick="doLogout()">🚪 Đăng xuất</a>
       </div>
     </div>
 
