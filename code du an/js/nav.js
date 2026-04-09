@@ -30,10 +30,11 @@
   </a>
 
   <ul class="nav-links">
-    <li><a href="trang-chu.html">Điểm đến</a></li>
     <li><a href="tour-du-lich.html">Tour Du Lịch</a></li>
     <li><a href="uu-dai.html">Ưu đãi</a></li>
+    <li id="navLichSu" style="display:none"><a href="ca-nhan.html?tab=history">Lịch sử tour</a></li>
     <li><a href="ve-chung-toi.html">Về chúng tôi</a></li>
+    <li id="navYeuThich" style="display:none"><a href="ca-nhan.html?tab=promotions">Yêu thích</a></li>
   </ul>
 
   <div class="nav-cta">
