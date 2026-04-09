@@ -375,6 +375,7 @@
               var recTours = recGetTours(4);
               if (recTours.length) {
                 document.getElementById('recSection').style.display = 'block';
+                if (typeof initRecommendSection === 'function') initRecommendSection();
                 recRender('recGrid');
                 var name = u.name ? u.name.split(' ').slice(-1)[0] : '';
                 if (name) document.getElementById('recSubtitle').textContent = 'Dựa trên sở thích của ' + name;
