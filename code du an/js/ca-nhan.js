@@ -231,10 +231,10 @@ async function changePassword() {
     if (res && res.ok) { apiClearTokens(); }
     else if (res) { showPwdErr('Mật khẩu hiện tại không đúng.', err); return; }
     else {
-      var db = []; try { db = JSON.parse(localStorage.getItem('vt_userdb') || sessionStorage.getItem('vt_userdb') || '[]'); } catch (e) { }
+      var db = []; try { db = JSON.parse(localStorage.getItem('vt_userdb') || localStorage.getItem('vt_userdb') || '[]'); } catch (e) { }
       var uid = db.find(function (x) { return x.email === u.email; });
       if (uid && uid.password && uid.password !== cur) { showPwdErr('Mật khẩu hiện tại không đúng.', err); return; }
-      if (uid) { uid.password = nw; try { localStorage.setItem('vt_userdb', JSON.stringify(db)); } catch (e) { } try { sessionStorage.setItem('vt_userdb', JSON.stringify(db)); } catch (e) { } }
+      if (uid) { uid.password = nw; try { localStorage.setItem('vt_userdb', JSON.stringify(db)); } catch (e) { } try { localStorage.setItem('vt_userdb', JSON.stringify(db)); } catch (e) { } }
     }
   } catch (e) { }
   ['pwdCurrent', 'pwdNew', 'pwdConfirm'].forEach(function (id) { var el = document.getElementById(id); if (el) el.value = ''; });

@@ -198,7 +198,7 @@ function nvRenderBookings() {
   var tbody = document.getElementById('nvBookingsBody');
   if (!tbody) return;
   var db = [];
-  try { db = JSON.parse(localStorage.getItem('vt_userdb') || sessionStorage.getItem('vt_userdb') || '[]'); } catch (e) { }
+  try { db = JSON.parse(localStorage.getItem('vt_userdb') || localStorage.getItem('vt_userdb') || '[]'); } catch (e) { }
   var all = [];
   db.forEach(function (u) {
     try {

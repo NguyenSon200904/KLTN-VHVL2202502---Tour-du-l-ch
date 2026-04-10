@@ -18,7 +18,7 @@ function switchTab(name) {
 // ===== DASHBOARD STATS =====
 function adminUpdateDashStats() {
   var db = [];
-  try { db = JSON.parse(localStorage.getItem('vt_userdb') || sessionStorage.getItem('vt_userdb') || '[]'); } catch (e) { }
+  try { db = JSON.parse(localStorage.getItem('vt_userdb') || localStorage.getItem('vt_userdb') || '[]'); } catch (e) { }
   var tours = adminGetTours();
   var statU = document.getElementById('statUsers');
   var statT = document.getElementById('statTours');
@@ -69,7 +69,7 @@ async function renderUsersTable() {
   // Fallback localStorage
   if (!users.length) {
     try {
-      var raw = JSON.parse(localStorage.getItem('vt_userdb') || sessionStorage.getItem('vt_userdb') || '[]');
+      var raw = JSON.parse(localStorage.getItem('vt_userdb') || localStorage.getItem('vt_userdb') || '[]');
       // Lọc theo search
       if (ADMIN_USER_SEARCH) {
         var q = ADMIN_USER_SEARCH.toLowerCase();
@@ -164,12 +164,12 @@ async function adminSetRole(id, role, btn) {
 
   // Fallback: cập nhật localStorage
   try {
-    var db = JSON.parse(localStorage.getItem('vt_userdb') || sessionStorage.getItem('vt_userdb') || '[]');
+    var db = JSON.parse(localStorage.getItem('vt_userdb') || localStorage.getItem('vt_userdb') || '[]');
     var u = db.find(function (x) { return x.id == id || x._id == id || x.email == id; });
     if (u) {
       u.role = role === 1 ? 'admin' : 'customer';
       localStorage.setItem('vt_userdb', JSON.stringify(db));
-      sessionStorage.setItem('vt_userdb', JSON.stringify(db));
+      localStorage.setItem('vt_userdb', JSON.stringify(db));
       showToast('✅ Đã đổi quyền thành ' + label);
     }
   } catch (e) { }
@@ -192,13 +192,13 @@ async function adminSetStatus(id, status, btn) {
 
   // Fallback: cập nhật localStorage
   try {
-    var db2 = JSON.parse(localStorage.getItem('vt_userdb') || sessionStorage.getItem('vt_userdb') || '[]');
+    var db2 = JSON.parse(localStorage.getItem('vt_userdb') || localStorage.getItem('vt_userdb') || '[]');
     var u2 = db2.find(function (x) { return x.id == id || x._id == id || x.email == id; });
     if (u2) {
       u2.locked = (status === 2);
       u2.status = status;
       localStorage.setItem('vt_userdb', JSON.stringify(db2));
-      sessionStorage.setItem('vt_userdb', JSON.stringify(db2));
+      localStorage.setItem('vt_userdb', JSON.stringify(db2));
       showToast('✅ Đã ' + label + ' tài khoản');
     }
   } catch (e) { }
@@ -673,7 +673,7 @@ function statsPeriod(btn, days) {
 function statsLoadData() {
   // Đọc dữ liệu thật từ localStorage
   var db = [];
-  try { db = JSON.parse(localStorage.getItem('vt_userdb') || sessionStorage.getItem('vt_userdb') || '[]'); } catch (e) { }
+  try { db = JSON.parse(localStorage.getItem('vt_userdb') || localStorage.getItem('vt_userdb') || '[]'); } catch (e) { }
 
   var totalBookings = 0;
   var totalRevenue = 0;
@@ -770,7 +770,7 @@ function adminRenderPromoPreview() {
 
 function adminUpdateDashStats() {
   var db = [];
-  try { db = JSON.parse(localStorage.getItem('vt_userdb') || sessionStorage.getItem('vt_userdb') || '[]'); } catch (e) { }
+  try { db = JSON.parse(localStorage.getItem('vt_userdb') || localStorage.getItem('vt_userdb') || '[]'); } catch (e) { }
   var total = 0;
   db.forEach(function (u) { try { total += JSON.parse(localStorage.getItem('vt_bookings_' + u.email) || '[]').length; } catch (e) { } });
   var el = function (id) { return document.getElementById(id); };
@@ -987,7 +987,7 @@ async function adminBkRender() {
   // Fallback localStorage
   if (!bookings.length) {
     var db = [];
-    try { db = JSON.parse(localStorage.getItem('vt_userdb') || sessionStorage.getItem('vt_userdb') || '[]'); } catch (e) { }
+    try { db = JSON.parse(localStorage.getItem('vt_userdb') || localStorage.getItem('vt_userdb') || '[]'); } catch (e) { }
     db.forEach(function (u) {
       try {
         var bks = JSON.parse(localStorage.getItem('vt_bookings_' + u.email) || '[]');
@@ -1117,7 +1117,7 @@ async function adminBkCancel(btn) {
 function adminBkUpdateLocal(idOrCode, status) {
   var stStr = { 0: 'upcoming', 1: 'confirmed', 2: 'completed', 3: 'cancelled' }[status] || 'upcoming';
   var db = [];
-  try { db = JSON.parse(localStorage.getItem('vt_userdb') || sessionStorage.getItem('vt_userdb') || '[]'); } catch (e) { }
+  try { db = JSON.parse(localStorage.getItem('vt_userdb') || localStorage.getItem('vt_userdb') || '[]'); } catch (e) { }
   db.forEach(function (u) {
     var key = 'vt_bookings_' + u.email;
     try {
