@@ -1,0 +1,519 @@
+﻿// ============================================================
+// 3nav.js – Nav dùng chung (match HTML của bạn)
+// ============================================================
+(function () {
+  if (window.NO_NAV) return;
+
+  const NAV_HTML = `
+<nav id="mainNav">
+  <a href="index.html" style="display:flex;align-items:center;gap:9px;text-decoration:none">
+    <div style="width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;">
+      <svg fill=" #2d8a4e" height=" 40px" width="40px" version="1.1" id="Layer_1"
+                xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+                viewBox="0 0 268.321 268.321" xml:space="preserve">
+                <g id="SVGRepo_bgCarrier" stroke-width="0"></g>
+                <g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g>
+                <g id="SVGRepo_iconCarrier">
+                  <g>
+                    <g>
+                      <path
+                        d="M259.342,39.744l0.159-0.154c9.298-9.305,9.598-24.138,0.668-33.07c-4.204-4.204-9.86-6.52-15.92-6.52 c-6.421,0-12.514,2.553-17.152,7.188l-20.41,21.81l-73-21.854l-15.131,15.135c-1.907,1.902-2.956,4.437-2.956,7.131 c0,2.696,1.049,5.227,2.956,7.129l0.664,0.664l52.728,29.018l-7.715,8.372c-10.226-6.622-21.62-11.498-33.85-14.282 c-7.724-1.761-15.624-2.652-23.479-2.652c-3.963,0-7.874,0.238-11.734,0.664l-0.366-0.406c-0.172,0.154-0.366,0.328-0.555,0.505 c-43.823,5.198-79.893,37.113-89.931,81.18c-6.252,27.427-1.446,55.647,13.528,79.458c14.974,23.809,38.329,40.362,65.758,46.609 c7.724,1.761,15.625,2.652,23.479,2.652c49.415,0,91.602-33.689,102.589-81.927c1.962-8.606,2.833-17.291,2.643-25.89 c0.6-2.204,0.496-4.607-0.436-7.224c-1.49-16.284-6.776-32.106-15.735-46.347c-1.089-1.73-2.235-3.415-3.415-5.061l7.832-7.219 l29.254,53.151l0.67,0.668c1.905,1.898,4.435,2.945,7.122,2.945c2.687,0,5.211-1.045,7.12-2.947l15.14-15.137l-21.999-73.498 L259.342,39.744z M54.354,238.588c-10.012-6.968-18.622-15.935-25.313-26.574c-11.901-18.924-16.429-41.032-13.054-62.915 c5.897,1.589,11.851,3.937,14.137,5.57c-0.086,0.608-0.181,1.226-0.276,1.841c-0.884,5.738-2.22,14.405,4.845,19.548 c6.183,4.497,11.842,0.291,14.423-1.883c1.036,0.835,2.165,1.666,3.326,2.524c1.812,1.336,5.008,3.695,6.157,5.13 c-0.364,1.268-0.899,2.766-1.422,4.226c-2.052,5.731-4.175,11.654-0.225,15.816c1.362,1.675,5.434,9.375,6.474,12.148 c-0.022,0.924,0.046,1.975,0.134,3.344c0.093,1.411,0.298,4.592,0.088,5.886c-0.005-0.001-8.024,10.099-7.561,12.491 L54.354,238.588z M196.776,183.45c-9.609,42.183-46.49,71.642-89.693,71.642c-6.869,0-13.779-0.78-20.542-2.321 c-8.282-1.885-16.125-4.872-23.404-8.798c6.454-5.458,12.04-14.225,12.124-14.366c1.957-3.307,1.845-7.698,1.497-13.096 c-0.057-0.904-0.123-1.68-0.11-2.178c-0.009,0.311-0.066,0.558-0.108,0.734c1.06-4.693-5.319-15.497-8.388-20.099 c0.317-1.217,0.992-3.099,1.475-4.453c0.8-2.235,1.627-4.545,2.123-6.737c1.823-7.929-5.542-13.361-11.458-17.723 c-1.689-1.245-3.434-2.533-4.208-3.353c-2.663-2.808-7.149-4.975-13.693-0.104c0.117-1.4,0.362-2.985,0.529-4.078 c0.22-1.424,0.434-2.846,0.571-4.215c0.761-7.673-7.523-13.764-24.579-18.122c9.355-30.96,33.747-54.121,64.081-62.189 c-1.353,3.304-2.423,7.124-2.914,11.571c-0.284,2.568-0.652,4.894-0.977,6.942c-1.294,8.176-2.762,17.443,8.981,22.672 c6.401,2.859,10.867,3.329,14.458,3.708c1.585,0.165,2.912,0.306,4.29,0.619c0.399,1.988,0.145,6.073,0.042,7.751 c-0.145,2.343-0.302,4.869,0.447,6.988c0.968,5.348,5.641,24.889,23.814,37.494c-2.557,1.525-5.919,3.086-8.74,3.628 c-1.53,0.293-3.097,0.489-4.614,0.679c-6.205,0.778-14.703,1.838-18.259,11.639c-1.581,4.332-0.555,7.486,0.584,9.369 c2.83,4.68,8.337,5.418,12.358,5.956c0.648,0.086,1.558,0.209,2.105,0.317c2.489,1.823,10.257,6.986,18.309,6.986 c3.639,0,7.336-1.056,10.632-3.948c1.325-1.124,7.607-1.051,10.632-1.012c6.401,0.075,12.446,0.15,16.303-3.75 c1.894-1.918,2.861-4.422,2.795-7.25c-0.137-5.524,10.438-11.465,18.935-16.24c2.05-1.151,4.146-2.334,6.183-3.562 C197.976,177.522,197.451,180.492,196.776,183.45z M198.951,157.783c-1.918,2.429-8.903,6.357-13.257,8.802 c-11.377,6.393-24.171,13.581-25.56,25.465c-1.666,0.134-4.067,0.101-5.833,0.082c-6.774-0.075-14.432-0.174-19.524,4.303 c-2.202,1.933-8.903-1.043-12.73-4.025c-2.143-1.673-4.704-2.081-7.422-2.449c1.043-0.265,2.55-0.505,4.797-0.783 c1.644-0.207,3.509-0.439,5.462-0.813c5.93-1.137,21.382-7.625,22.67-16.198c0.536-3.567-1.186-6.871-4.504-8.63 c-19.685-10.4-22.705-31.423-22.822-32.285l-0.231-1.858c0.024-0.436,0.053-0.908,0.077-1.314 c0.392-6.309,1.12-18.054-8.147-20.891c-3.073-0.935-5.689-1.21-8-1.453c-3.203-0.335-5.967-0.626-10.455-2.63 c-1.6-0.712-1.933-1.182-1.933-1.182c-0.403-0.827,0.194-4.592,0.63-7.341c0.348-2.196,0.741-4.682,1.06-7.561 c0.857-7.737,3.974-12.596,6.948-15.88c2.226-0.159,4.466-0.258,6.73-0.258c6.867,0,13.777,0.78,20.54,2.321 c9.933,2.264,19.237,6.104,27.68,11.271l-0.661,0.716c-1.16,1.171-2.218,2.412-3.168,3.712l-23.648-6.122l-10.369,10.372 c-1.744,1.739-2.705,4.054-2.705,6.518c0,2.467,0.959,4.786,2.703,6.529l0.743,0.745l27.239,13.824l0.979,0.979l13.824,27.244 l0.745,0.743c1.741,1.744,4.06,2.705,6.525,2.705c2.467,0,4.786-0.961,6.52-2.7l10.376-10.372l-6.247-24.133 c1.228-0.906,2.396-1.911,3.505-3.007l1.415-1.303c0.693,1.002,1.389,2.002,2.044,3.043 C193.381,127.378,198.1,142.39,198.951,157.783z M244.93,129.556l-6.49,6.49l-34.432-62.567l-31.573,29.109l-0.187,0.179 c-1.453,1.448-3.073,2.619-4.814,3.476l-4.823,2.381l6.924,26.737l-1.032,1.032l-11.421-22.504l-3.955-3.959l-22.502-11.416 l1.029-1.029l26.351,6.822l2.354-4.902c0.864-1.792,2.059-3.461,3.553-4.958l29.199-31.672l-62.143-34.201l6.49-6.492 l73.288,21.938l25.769-27.543c2.134-2.096,4.874-3.249,7.733-3.249c2.526,0,4.858,0.939,6.567,2.645 c3.754,3.754,3.478,10.149-0.6,14.297l-27.368,25.599L244.93,129.556z">
+                      </path>
+                    </g>
+                  </g>
+                </g>
+              </svg>
+    </div>
+    <div style="line-height:1;font-size:0.95rem;font-weight:800">
+      <span style="color:#2d8a4e">Vietnam</span><span style="color:#1a1a1a">Travel</span>
+    </div>
+  </a>
+
+  <ul class="nav-links">
+    <li><a href="index.html">Điểm đến</a></li>
+    <li><a href="tour-du-lich.html">Tour du lịch</a></li>
+    <li><a href="uu-dai.html">Ưu đãi</a></li>
+    <li><a href="ve-chung-toi.html">Về chúng tôi</a></li>
+  </ul>
+
+  <div class="nav-cta">
+
+    <!-- Guest -->
+    <div id="navGuest" style="display:flex;gap:8px;align-items:center;">
+      <button class="btn-login-nav" onclick="location.href='dang-nhap.html'">Đăng nhập</button>
+      <button class="btn-register-nav" onclick="location.href='dang-ky.html'">Đăng ký</button>
+    </div>
+
+    <!-- User -->
+    <div id="navUser" style="display:none;align-items:center;gap:10px;position:relative;">
+      <div class="nav-user-info" onclick="toggleUserMenu()">
+        <div class="nav-avatar" id="navAvatarEl"></div>
+        <span class="nav-username" id="navUsernameEl"></span>
+        <i class="fa-solid fa-angle-down nav-icon" style="color:var(--muted);"></i>
+      </div>
+
+      <div class="user-dropdown" id="userDropdown" >
+        <div class="user-dropdown-header">
+          <div class="user-dropdown-name" id="dropName">—</div>
+          <div class="user-dropdown-email" id="dropEmail">—</div>
+        </div>
+
+        <a class="user-dropdown-item" id="profileMenuBtn" href="ca-nhan.html">Hồ sơ cá nhân</a>
+        <a class="user-dropdown-item" id="adminMenuBtn" href="admin.html" style="display:none">Quản trị Admin</a>
+        <a class="user-dropdown-item logout-item" onclick="doLogout()">Đăng xuất</a>
+      </div>
+    </div>
+
+  </div>
+</nav>
+`;
+
+  const navMount = document.getElementById('mainNav');
+  if (navMount) {
+    navMount.outerHTML = NAV_HTML;
+  } else {
+    document.body.insertAdjacentHTML('afterbegin', NAV_HTML);
+  }
+  document.body.style.paddingTop = '82px';
+
+  // ==========================
+  // HELPERS
+  // ==========================
+  function getCurrentUser() {
+    try {
+      return JSON.parse(localStorage.getItem('vt_user'));
+    } catch {
+      return null;
+    }
+  }
+
+  function isVerifiedUser(user) {
+    if (!user) return false;
+    const verifyValue = user.verify;
+    return verifyValue === true || Number(verifyValue) === 1;
+  }
+
+  function ensureVerifyModal() {
+    if (document.getElementById('vtVerifyModalStyle')) return;
+
+    const style = document.createElement('style');
+    style.id = 'vtVerifyModalStyle';
+    style.textContent = `
+      .vt-verify-modal {
+        position: fixed;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 120000;
+        padding: 16px;
+      }
+
+      .vt-verify-modal.vt-verify-modal--open {
+        display: flex;
+      }
+
+      .vt-verify-backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(9, 16, 13, 0.48);
+      }
+
+      .vt-verify-dialog {
+        position: relative;
+        width: min(460px, calc(100vw - 32px));
+        background: #fff;
+        border-radius: 18px;
+        box-shadow: 0 24px 50px rgba(6, 22, 15, 0.28);
+        border: 1px solid rgba(45, 138, 78, 0.16);
+        padding: 24px;
+      }
+
+      .vt-verify-title {
+        margin: 0 0 8px;
+        color: #133321;
+        font-size: 1.2rem;
+        font-weight: 800;
+      }
+
+      .vt-verify-desc {
+        margin: 0;
+        color: #4c6257;
+        font-size: 0.93rem;
+        line-height: 1.6;
+      }
+
+      .vt-verify-actions {
+        margin-top: 18px;
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .vt-verify-btn {
+        border: none;
+        border-radius: 10px;
+        font-size: 0.9rem;
+        font-weight: 700;
+        padding: 10px 14px;
+        cursor: pointer;
+      }
+
+      .vt-verify-btn--primary {
+        background: #2d8a4e;
+        color: #fff;
+      }
+
+      .vt-verify-btn--ghost {
+        background: #e8f5ee;
+        color: #1f5e35;
+      }
+
+      .vt-verify-btn--text {
+        background: transparent;
+        color: #5a6e63;
+      }
+    `;
+    document.head.appendChild(style);
+
+    const modal = document.createElement('div');
+    modal.id = 'vtVerifyModal';
+    modal.className = 'vt-verify-modal';
+    modal.innerHTML = `
+      <div class="vt-verify-backdrop"></div>
+      <div class="vt-verify-dialog" role="dialog" aria-modal="true" aria-labelledby="vtVerifyTitle">
+        <h3 class="vt-verify-title" id="vtVerifyTitle">Tài khoản chưa được xác thực</h3>
+        <p class="vt-verify-desc">Bạn cần xác thực email để sử dụng đầy đủ chức năng. Hãy kiểm tra hộp thư hoặc yêu cầu gửi lại email xác thực.</p>
+        <div class="vt-verify-actions">
+          <button type="button" class="vt-verify-btn vt-verify-btn--primary" id="vtVerifyNowBtn">Xác thực ngay</button>
+          <button type="button" class="vt-verify-btn vt-verify-btn--ghost" id="vtVerifyResendBtn">Gửi lại email</button>
+          <button type="button" class="vt-verify-btn vt-verify-btn--text" id="vtVerifyLaterBtn">Để sau</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const verifyNowBtn = document.getElementById('vtVerifyNowBtn');
+    const resendBtn = document.getElementById('vtVerifyResendBtn');
+    const laterBtn = document.getElementById('vtVerifyLaterBtn');
+
+    verifyNowBtn.addEventListener('click', function () {
+      window.location.href = 'xac-thuc.html';
+    });
+
+    resendBtn.addEventListener('click', async function () {
+      if (resendBtn.disabled) return;
+
+      const oldText = resendBtn.textContent;
+      resendBtn.disabled = true;
+      resendBtn.textContent = 'Đang gửi...';
+
+      try {
+        if (typeof apiResendVerifyEmail !== 'function') {
+          throw new Error('apiResendVerifyEmail không tồn tại');
+        }
+
+        const res = await apiResendVerifyEmail();
+        if (res && res.ok) {
+          if (typeof showToast === 'function') {
+            showToast('Đã gửi lại email xác thực. Vui lòng kiểm tra hộp thư.');
+          } else {
+            alert('Đã gửi lại email xác thực. Vui lòng kiểm tra hộp thư.');
+          }
+        } else {
+          const msg = res?.data?.message || 'Không thể gửi lại email xác thực';
+          if (typeof showToast === 'function') {
+            showToast(msg);
+          } else {
+            alert(msg);
+          }
+        }
+      } catch (error) {
+        if (typeof showToast === 'function') {
+          showToast('Không thể gửi lại email xác thực');
+        } else {
+          alert('Không thể gửi lại email xác thực');
+        }
+      } finally {
+        resendBtn.disabled = false;
+        resendBtn.textContent = oldText;
+      }
+    });
+
+    laterBtn.addEventListener('click', function () {
+      modal.classList.remove('vt-verify-modal--open');
+    });
+  }
+
+  function openVerifyModal() {
+    ensureVerifyModal();
+    const modal = document.getElementById('vtVerifyModal');
+    if (modal) modal.classList.add('vt-verify-modal--open');
+  }
+
+  window.checkUserVerifiedForAction = function checkUserVerifiedForAction(actionName) {
+    const user = getCurrentUser();
+    const token = localStorage.getItem('vt_access_token');
+
+    // Guest: yêu cầu đăng nhập, không hiển thị modal xác thực email.
+    if (!user || !token) {
+      if (typeof showToast === 'function') {
+        showToast('⚠️ Vui lòng đăng nhập để ' + (actionName || 'thực hiện thao tác này'));
+      }
+      return false;
+    }
+
+    if (!isVerifiedUser(user)) {
+      if (typeof showToast === 'function') {
+        showToast('⚠️ Vui lòng xác thực email trước khi ' + (actionName || 'thực hiện hành động này'));
+      }
+      openVerifyModal();
+      return false;
+    }
+    return true;
+  };
+
+  // ==========================
+  // INIT NAV
+  // ==========================
+  function initNav() {
+    const user = getCurrentUser();
+    const token = localStorage.getItem('vt_access_token');
+
+    const navGuest = document.getElementById('navGuest');
+    const navUser = document.getElementById('navUser');
+    const profileMenuBtn = document.getElementById('profileMenuBtn');
+    const adminMenuBtn = document.getElementById('adminMenuBtn');
+
+    if (!user || !token) {
+      navGuest.style.display = 'flex';
+      navUser.style.display = 'none';
+      return;
+    }
+
+    navGuest.style.display = 'none';
+    navUser.style.display = 'flex';
+
+    // set info
+    document.getElementById('navUsernameEl').innerText = user.name || 'User';
+    document.getElementById('dropName').innerText = user.name || '';
+    document.getElementById('dropEmail').innerText = user.email || '';
+
+    const avatarEl = document.getElementById('navAvatarEl')
+
+    if (user.avatar && user.avatar.trim() !== '') {
+      // có avatar ảnh
+      avatarEl.style.backgroundImage = `url(${user.avatar})`
+      avatarEl.style.backgroundSize = 'cover'
+      avatarEl.style.backgroundPosition = 'center'
+      avatarEl.style.backgroundRepeat = 'no-repeat'
+
+      avatarEl.innerText = ''
+    } else {
+      // fallback chữ cái
+      avatarEl.style.backgroundImage = ''
+      avatarEl.innerText = user.name?.charAt(0).toUpperCase() || 'U'
+    }
+
+    // menu theo quyền
+    const roleText = String(user.role || '').toLowerCase();
+    const isAdminRole = Number(user.role) === Number(ROLE.ADMIN) || roleText === 'admin';
+    const isEmployeeRole = Number(user.role) === 2 || roleText === 'employee' || roleText === 'staff' || roleText === 'nhanvien';
+
+    if (isAdminRole) {
+      if (adminMenuBtn) {
+        adminMenuBtn.style.display = 'block';
+        adminMenuBtn.textContent = 'Quản trị Admin';
+        adminMenuBtn.href = 'admin.html';
+      }
+      if (profileMenuBtn) profileMenuBtn.style.display = 'none';
+      return;
+    }
+
+    if (isEmployeeRole) {
+      if (adminMenuBtn) {
+        adminMenuBtn.style.display = 'block';
+        adminMenuBtn.textContent = 'Quản lý';
+        adminMenuBtn.href = 'nhan-vien.html';
+      }
+      if (profileMenuBtn) profileMenuBtn.style.display = 'none';
+      return;
+    }
+
+    if (adminMenuBtn) adminMenuBtn.style.display = 'none';
+    if (profileMenuBtn) profileMenuBtn.style.display = 'block';
+  }
+
+  // ==========================
+  // DROPDOWN
+  // ==========================
+
+  document.addEventListener('click', function (e) {
+    const menu = document.getElementById('userDropdown');
+    const btn = document.querySelector('.nav-user-info');
+
+    if (!menu || !btn) return;
+
+    if (!btn.contains(e.target)) {
+      menu.classList.remove('open');
+    }
+  });
+
+  // ==========================
+  // LOGOUT
+  // ==========================
+  function performLogout() {
+    localStorage.clear();
+    window.location.href = 'dang-nhap.html';
+  }
+
+  function ensureLogoutModal() {
+    if (document.getElementById('vtLogoutModalStyle')) return;
+
+    var style = document.createElement('style');
+    style.id = 'vtLogoutModalStyle';
+    style.textContent = `
+      .vt-logout-modal {
+        position: fixed;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 120100;
+        padding: 16px;
+      }
+
+      .vt-logout-modal.vt-logout-modal--open {
+        display: flex;
+      }
+
+      .vt-logout-backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(9, 16, 13, 0.48);
+      }
+
+      .vt-logout-dialog {
+        position: relative;
+        width: min(420px, calc(100vw - 32px));
+        background: #fff;
+        border-radius: 16px;
+        box-shadow: 0 24px 48px rgba(6, 22, 15, 0.26);
+        border: 1px solid rgba(45, 138, 78, 0.14);
+        padding: 22px;
+      }
+
+      .vt-logout-title {
+        margin: 0 0 8px;
+        color: #133321;
+        font-size: 1.1rem;
+        font-weight: 800;
+      }
+
+      .vt-logout-desc {
+        margin: 0;
+        color: #4c6257;
+        font-size: 0.92rem;
+        line-height: 1.55;
+      }
+
+      .vt-logout-actions {
+        margin-top: 18px;
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+      }
+
+      .vt-logout-btn {
+        border: none;
+        border-radius: 10px;
+        font-size: 0.9rem;
+        font-weight: 700;
+        padding: 9px 14px;
+        cursor: pointer;
+      }
+
+      .vt-logout-btn--cancel {
+        background: #eef3ef;
+        color: #2b5940;
+      }
+
+      .vt-logout-btn--confirm {
+        background: #e74c3c;
+        color: #fff;
+      }
+    `;
+    document.head.appendChild(style);
+
+    var modal = document.createElement('div');
+    modal.id = 'vtLogoutModal';
+    modal.className = 'vt-logout-modal';
+    modal.innerHTML = `
+      <div class="vt-logout-backdrop"></div>
+      <div class="vt-logout-dialog" role="dialog" aria-modal="true" aria-labelledby="vtLogoutTitle">
+        <h3 class="vt-logout-title" id="vtLogoutTitle">Xác nhận đăng xuất</h3>
+        <p class="vt-logout-desc">Bạn có chắc chắn muốn đăng xuất khỏi tài khoản này không?</p>
+        <div class="vt-logout-actions">
+          <button type="button" class="vt-logout-btn vt-logout-btn--cancel" id="vtLogoutCancelBtn">Hủy</button>
+          <button type="button" class="vt-logout-btn vt-logout-btn--confirm" id="vtLogoutConfirmBtn">Đăng xuất</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    var closeModal = function () {
+      modal.classList.remove('vt-logout-modal--open');
+    };
+
+    modal.querySelector('.vt-logout-backdrop').addEventListener('click', closeModal);
+    document.getElementById('vtLogoutCancelBtn').addEventListener('click', closeModal);
+    document.getElementById('vtLogoutConfirmBtn').addEventListener('click', function () {
+      closeModal();
+      performLogout();
+    });
+  }
+
+  function openLogoutModal() {
+    ensureLogoutModal();
+    var modal = document.getElementById('vtLogoutModal');
+    if (modal) modal.classList.add('vt-logout-modal--open');
+  }
+
+  window.doLogout = function () {
+    openLogoutModal();
+  };
+
+  // ==========================
+  // ACTIVE MENU
+  // ==========================
+  const path = window.location.pathname.split('/').pop();
+  const activePathMap = {
+    'chi-tiet-tour.html': 'tour-du-lich.html',
+    'dat-tour.html': 'tour-du-lich.html',
+  };
+  const activePath = activePathMap[path] || path;
+  document.querySelectorAll('.nav-links a').forEach((a) => {
+    if (a.getAttribute('href') === activePath) {
+      a.style.color = '#2d8a4e';
+      a.style.fontWeight = '700';
+    }
+  });
+
+  // ==========================
+  // INIT
+  // ==========================
+  initNav();
+})();
+window.toggleUserMenu = function () {
+  const dd = document.getElementById('userDropdown')
+  if (dd) dd.classList.toggle('open')
+}
+
+document.addEventListener('click', function (e) {
+  if (!e.target.closest('.nav-user-info') && !e.target.closest('.user-dropdown')) {
+    const dd = document.getElementById('userDropdown')
+    if (dd) dd.classList.remove('open')
+  }
+})

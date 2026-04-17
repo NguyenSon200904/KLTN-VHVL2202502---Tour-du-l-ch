@@ -1,0 +1,486 @@
+// ============================================================
+// chi-tiet-tour.js
+// ============================================================
+
+// STATE
+let tourData = null;
+let schedules = [];
+let selectedSchedule = null;
+let guests = { adult: 1, child: 0, baby: 0 };
+
+const HIGHLIGHT_ICON = `
+<svg class="ct-highlight-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <path d="M12 3.5L13.9 8.1L18.9 8.5L15.1 11.7L16.3 16.6L12 13.9L7.7 16.6L8.9 11.7L5.1 8.5L10.1 8.1L12 3.5Z" fill="currentColor"/>
+  <circle cx="19" cy="5" r="2" fill="currentColor" opacity="0.65"/>
+</svg>`;
+
+function getStoredUser() {
+  try {
+    return JSON.parse(localStorage.getItem('vt_user') || sessionStorage.getItem('vt_user') || 'null');
+  } catch {
+    return null;
+  }
+}
+
+function isAdminOrStaffRole(role) {
+  var numRole = Number(role);
+  if (numRole === 1 || numRole === 2) return true;
+  var r = String(role || '').trim().toLowerCase();
+  return r === 'admin' || r === 'staff' || r === 'employee' || r === 'nhanvien' || r === 'nhan_vien' || r === 'nhân viên';
+}
+
+function isAdminOrStaffUser() {
+  var user = getStoredUser();
+  return isAdminOrStaffRole(user?.role);
+}
+
+// INIT
+window.addEventListener('DOMContentLoaded', async () => {
+
+  const params = new URLSearchParams(window.location.search);
+  const slug = params.get('slug') || params.get('tour') || params.get('id');
+
+  if (!slug) {
+    showError();
+    return;
+  }
+
+  // 🔥 nếu snapshot KHÁC tour → xóa
+  const snapshot = JSON.parse(sessionStorage.getItem('vt_checkout_tour') || 'null');
+
+  if (snapshot && snapshot.tourId !== slug) {
+    sessionStorage.removeItem('vt_checkout_tour');
+  }
+
+  const detailSnapshot = JSON.parse(sessionStorage.getItem('vt_detail_state') || 'null');
+  if (detailSnapshot && detailSnapshot.tourId && detailSnapshot.tourId !== slug) {
+    sessionStorage.removeItem('vt_detail_state');
+  }
+
+  await loadTour(slug);
+});
+
+// LOAD TOUR
+async function loadTour(slug) {
+  try {
+    const res = await apiGetTour(slug);
+
+    if (!res || !res.ok) {
+      showError();
+      return;
+    }
+
+    const result = res.data?.result?.tour || res.data?.result;
+    tourData = result?.tour || result;
+    schedules = result?.schedules || [];
+
+    renderTour();
+    renderSchedules();
+    restoreDetailState();
+
+    document.getElementById('ctLoading').style.display = 'none';
+    document.getElementById('ctMain').style.display = 'block';
+  } catch (e) {
+    console.error(e);
+    showError();
+  }
+}
+
+// RENDER TOUR
+function renderTour() {
+  const t = tourData;
+  if (!t) return;
+
+  document.getElementById('ctBreadcrumbName').textContent = t.name || '—';
+  document.title = (t.name || 'Chi tiết tour') + ' – VietnamTravel';
+
+  const img = t.images?.[0] || '';
+  const heroImg = document.getElementById('ctHeroImg');
+  if (img) {
+    heroImg.src = img;
+    heroImg.alt = t.name;
+  } else {
+    heroImg.parentElement.style.background = 'linear-gradient(135deg,#2d8a4e,#3aaa62)';
+  }
+
+  document.getElementById('ctDuration').textContent =
+    t.duration_days ? `${t.duration_days} ngày ${t.duration_nights} đêm` : '—';
+  document.getElementById('ctHeroTitle').textContent = t.name || '—';
+  document.getElementById('ctDestination').textContent = t.destination || '—';
+  document.getElementById('ctDepartureCity').textContent = t.departure_city || '—';
+
+  document.getElementById('ctDesc').textContent = t.description || '—';
+
+  if (t.highlights?.length) {
+    document.getElementById('ctHighlights').innerHTML =
+      t.highlights.map(h => `<div class="ct-highlight-item">${HIGHLIGHT_ICON}<span class="ct-highlight-text">${h}</span></div>`).join('');
+  } else {
+    document.getElementById('ctHighlightsSection').style.display = 'none';
+  }
+
+  if (t.itinerary?.length) {
+    document.getElementById('ctItinerary').innerHTML =
+      t.itinerary.map(day => `
+        <div class="ct-day">
+          <div class="ct-day-num">${day.day}</div>
+          <div class="ct-day-body">
+            <div class="ct-day-title">${day.title}</div>
+            <div class="ct-day-desc">${day.description}</div>
+          </div>
+        </div>`).join('');
+  } else {
+    document.getElementById('ctItinerarySection').style.display = 'none';
+  }
+
+  if (t.includes?.length) {
+    document.getElementById('ctIncludes').innerHTML = t.includes.map(i => `<li>${i}</li>`).join('');
+  }
+
+  if (t.excludes?.length) {
+    document.getElementById('ctExcludes').innerHTML = t.excludes.map(i => `<li>${i}</li>`).join('');
+  }
+}
+
+// RENDER SCHEDULES
+function renderSchedules() {
+  const list = document.getElementById('ctScheduleList');
+
+  if (!schedules.length) {
+    list.innerHTML = '<p style="color:var(--muted);font-size:0.875rem">Hiện chưa có lịch khởi hành</p>';
+    document.getElementById('ctBtnBook').disabled = true;
+    return;
+  }
+
+  list.innerHTML = schedules.map((s, i) => {
+    const dep = new Date(s.departure_date).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const ret = new Date(s.return_date).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const price = s.price_adult.toLocaleString('vi-VN') + 'đ';
+    const slots = s.available_slots;
+    const slotsText = slots <= 3
+      ? `<span style="color:#e55;font-weight:600">Còn ${slots} chỗ!</span>`
+      : slots <= 10
+        ? `<span style="color:var(--gold)">Còn ${slots} chỗ</span>`
+        : `<span style="color:var(--muted)">${slots} chỗ trống</span>`;
+
+    return `
+      <div class="ct-schedule-item ${i === 0 ? 'active' : ''}" onclick="selectSchedule(${i}, this)">
+        <div>
+          <div class="ct-schedule-date">🗓️ ${dep} → ${ret}</div>
+          <div class="ct-schedule-slots">${slotsText}</div>
+        </div>
+        <div class="ct-schedule-price">${price}</div>
+      </div>`;
+  }).join('');
+
+  selectSchedule(0, list.querySelector('.ct-schedule-item'));
+}
+
+function selectSchedule(idx, el) {
+  document.querySelectorAll('.ct-schedule-item').forEach(i => i.classList.remove('active'));
+  if (el) el.classList.add('active');
+  selectedSchedule = schedules[idx];
+  enforceGuestLimit();
+  updateSummary();
+}
+
+// GUESTS
+function changeGuest(type, delta) {
+  const min = type === 'adult' ? 1 : 0;
+  const nextValue = Math.max(min, (guests[type] || 0) + delta);
+  const nextGuests = { ...guests, [type]: nextValue };
+  const slots = getAvailableSlots();
+
+  if (slots > 0 && totalGuests(nextGuests) > slots) {
+    showToast('⚠️ Số lượng khách vượt quá số chỗ trống (' + slots + ' chỗ)');
+    return;
+  }
+
+  guests[type] = nextValue;
+  document.getElementById('g' + type.charAt(0).toUpperCase() + type.slice(1)).textContent = guests[type];
+  updateSummary();
+}
+
+// PRICE SUMMARY
+function updateSummary() {
+  if (!selectedSchedule) return;
+
+  const pa = selectedSchedule.price_adult || 0;
+  const pc = selectedSchedule.price_child || 0;
+  const pb = selectedSchedule.price_baby || 0;
+
+  const totalAdult = pa * guests.adult;
+  const totalChild = pc * guests.child;
+  const totalBaby = pb * guests.baby;
+  const total = totalAdult + totalChild + totalBaby;
+
+  const fmt = n => (n > 0 ? n.toLocaleString('vi-VN') + 'đ' : '0đ');
+
+  document.getElementById('sumAdult').textContent = guests.adult;
+  document.getElementById('sumAdultPrice').textContent = fmt(totalAdult);
+  document.getElementById('sumChild').textContent = guests.child;
+  document.getElementById('sumChildPrice').textContent = guests.child > 0 ? fmt(totalChild) : '—';
+  document.getElementById('sumBaby').textContent = guests.baby;
+  document.getElementById('sumBabyPrice').textContent = guests.baby > 0 ? fmt(totalBaby) : '—';
+  document.getElementById('sumTotal').textContent = fmt(total);
+
+  updateCapacityHint();
+  updateBookButtonState();
+}
+
+// GO TO BOOKING
+async function goToBooking() {
+  if (isAdminOrStaffUser()) {
+    showToast('⚠️ Tài khoản admin/nhân viên không thể đặt tour');
+    return;
+  }
+
+  if (!selectedSchedule) {
+    showToast('⚠️ Vui lòng chọn lịch khởi hành');
+    return;
+  }
+
+  if (typeof checkUserVerifiedForAction !== 'undefined' && !checkUserVerifiedForAction('đặt tour')) {
+    return;
+  }
+
+  const slots = getAvailableSlots();
+  const pax = totalGuests();
+  if (slots > 0 && pax > slots) {
+    showToast('⚠️ Bạn đã chọn ' + pax + ' khách, nhưng lịch này chỉ còn ' + slots + ' chỗ');
+    updateBookButtonState();
+    return;
+  }
+
+  if (!localStorage.getItem('vt_access_token')) {
+    showToast('⚠️ Vui lòng đăng nhập để đặt tour');
+    setTimeout(() => { window.location.href = 'dang-nhap.html'; }, 1200);
+    return;
+  }
+
+  const user = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('vt_user') || 'null');
+    } catch {
+      return null;
+    }
+  })();
+
+  const btn = document.getElementById('ctBtnBook');
+  const oldText = btn ? btn.textContent : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Đang tạo booking...';
+  }
+
+  let fullName = String(user?.full_name || user?.name || '').trim();
+  let email = String(user?.email || '').trim();
+  let phone = String(user?.phone || '').trim();
+
+  // Local profile có thể bị cũ; đồng bộ lại từ backend trước khi tạo booking.
+  if ((!fullName || !email || !phone) && typeof apiGetMe === 'function') {
+    try {
+      const meRes = await apiGetMe();
+      if (meRes?.ok) {
+        const me = meRes?.data?.result?.user || meRes?.data?.result || {};
+        fullName = String(me?.full_name || me?.name || fullName).trim();
+        email = String(me?.email || email).trim();
+        phone = String(me?.phone || phone).trim();
+
+        // Cache lại để các trang khác dùng đúng dữ liệu mới.
+        try {
+          const oldUser = JSON.parse(localStorage.getItem('vt_user') || 'null') || {};
+          const merged = {
+            ...oldUser,
+            full_name: me?.full_name || oldUser?.full_name || '',
+            name: me?.full_name || oldUser?.name || '',
+            email: me?.email || oldUser?.email || '',
+            phone: me?.phone || oldUser?.phone || '',
+          };
+          localStorage.setItem('vt_user', JSON.stringify(merged));
+        } catch (e) { }
+      }
+    } catch (e) { }
+  }
+
+  if (!fullName || !email || !phone) {
+    const missing = [];
+    if (!fullName) missing.push('họ tên');
+    if (!email) missing.push('email');
+    if (!phone) missing.push('số điện thoại');
+    showToast('⚠️ Thiếu ' + missing.join(', ') + '. Vui lòng cập nhật hồ sơ trước khi đặt tour');
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = oldText || 'Đặt tour ngay';
+    }
+    return;
+  }
+
+  const body = {
+    schedule_id: selectedSchedule._id,
+    passengers: {
+      adults: guests.adult,
+      children: guests.child,
+      babies: guests.baby,
+    },
+    // Booking được tạo trước, chọn cổng thanh toán ở trang kế tiếp.
+    payment_method: 1,
+    contact_info: {
+      full_name: fullName,
+      email: email,
+      phone: phone,
+    },
+  };
+
+  try {
+    const res = await apiCreateBooking(body);
+    if (!res?.ok) {
+      const apiMsg = res?.data?.message || '';
+      const errs = res?.data?.errors;
+      let firstErr = '';
+      if (Array.isArray(errs) && errs.length) {
+        firstErr = errs[0]?.msg || errs[0]?.message || '';
+      } else if (errs && typeof errs === 'object') {
+        const firstVal = Object.values(errs)[0];
+        firstErr = firstVal?.msg || firstVal?.message || String(firstVal || '');
+      }
+      throw new Error(firstErr || apiMsg || 'Tạo booking thất bại');
+    }
+
+    const result = res?.data?.result || {};
+    const booking = result?.booking || result;
+    const bookingId = booking?._id || booking?.id || result?.booking_id || result?.id;
+
+    if (!bookingId) {
+      throw new Error('Không nhận được booking_id từ hệ thống');
+    }
+
+    window.location.href = 'dat-tour.html?booking_id=' + encodeURIComponent(bookingId);
+  } catch (error) {
+    console.error(error);
+    showToast('❌ ' + (error?.message || 'Không thể tạo booking'));
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = oldText || 'Đặt tour ngay';
+    }
+  }
+}
+
+function totalGuests(customGuests) {
+  const g = customGuests || guests;
+  return (g.adult || 0) + (g.child || 0) + (g.baby || 0);
+}
+
+function getAvailableSlots() {
+  if (!selectedSchedule) return 0;
+  const slots = Number(selectedSchedule.available_slots);
+  return Number.isFinite(slots) ? Math.max(0, slots) : 0;
+}
+
+function enforceGuestLimit() {
+  const slots = getAvailableSlots();
+  if (slots <= 0) return;
+
+  let pax = totalGuests();
+  if (pax <= slots) return;
+
+  // Giảm dần baby -> child -> adult(giữ tối thiểu 1 người lớn)
+  while (pax > slots && guests.baby > 0) {
+    guests.baby -= 1;
+    pax -= 1;
+  }
+  while (pax > slots && guests.child > 0) {
+    guests.child -= 1;
+    pax -= 1;
+  }
+  while (pax > slots && guests.adult > 1) {
+    guests.adult -= 1;
+    pax -= 1;
+  }
+
+  document.getElementById('gAdult').textContent = guests.adult;
+  document.getElementById('gChild').textContent = guests.child;
+  document.getElementById('gBaby').textContent = guests.baby;
+}
+
+function updateCapacityHint() {
+  const hint = document.getElementById('ctCapacityHint');
+  if (!hint || !selectedSchedule) return;
+
+  const slots = getAvailableSlots();
+  const pax = totalGuests();
+
+  hint.classList.remove('warn');
+  if (slots <= 0) {
+    hint.textContent = 'Lịch này đã hết chỗ.';
+    hint.classList.add('warn');
+    return;
+  }
+
+  if (pax > slots) {
+    hint.textContent = 'Bạn đang chọn ' + pax + ' khách, vượt quá số chỗ còn lại: ' + slots + '.';
+    hint.classList.add('warn');
+    return;
+  }
+
+  hint.textContent = 'Số chỗ còn lại: ' + slots + ' | Bạn đã chọn: ' + pax;
+}
+
+function updateBookButtonState() {
+  const btn = document.getElementById('ctBtnBook');
+  if (!btn) return;
+
+  const slots = getAvailableSlots();
+  const pax = totalGuests();
+  const blockedByRole = isAdminOrStaffUser();
+  const blocked = blockedByRole || !selectedSchedule || slots <= 0 || pax > slots;
+
+  btn.disabled = blocked;
+  if (blockedByRole) {
+    btn.textContent = 'Không khả dụng cho admin/nhân viên';
+    return;
+  }
+
+  btn.textContent = blocked ? 'Không đủ chỗ' : 'Đặt tour ngay';
+}
+
+// HELPERS
+function showError() {
+  document.getElementById('ctLoading').style.display = 'none';
+  document.getElementById('ctMain').style.display = 'none';
+  document.getElementById('ctError').style.display = 'block';
+}
+
+function restoreDetailState() {
+  try {
+    const state = JSON.parse(sessionStorage.getItem('vt_detail_state') || 'null');
+    if (!state) return;
+
+    const currentTourId = tourData?.slug || tourData?._id || '';
+    if (state.tourId && state.tourId !== currentTourId) {
+      sessionStorage.removeItem('vt_detail_state');
+      return;
+    }
+
+    // ===== restore guests =====
+    guests = state.guests || guests;
+
+    document.getElementById('gAdult').textContent = guests.adult;
+    document.getElementById('gChild').textContent = guests.child;
+    document.getElementById('gBaby').textContent = guests.baby;
+
+    // ===== restore schedule =====
+    const idx = schedules.findIndex(s => s._id === state.scheduleId);
+    if (idx !== -1) {
+      const el = document.querySelectorAll('.ct-schedule-item')[idx];
+      selectSchedule(idx, el);
+    }
+
+    // 🔥 OPTIONAL: xóa sau khi dùng
+    sessionStorage.removeItem('vt_detail_state');
+
+
+
+  } catch (e) {
+    console.error(e);
+  }
+}

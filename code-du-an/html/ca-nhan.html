@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tài Khoản Cá Nhân – VietnamTravel</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
+    <link rel="stylesheet" href="./css/bass.css">
+    <link rel="stylesheet" href="./css/nav.css">
+    <link rel="stylesheet" href="./css/home.css">
+    <link rel="stylesheet" href="./css/tours.css">
+    <link rel="stylesheet" href="./css/ca-nhan.css">
+  </head>
+
+  <body>
+    <div id="mainNav"></div>
+
+
+    <main id="page-ca-nhan">
+      <div style="margin-top: 82px;">
+        <div class="tl-breadcrumb">
+          <a href="index.html">Trang chủ</a>
+          <span>›</span>
+          <a id="tlBreadActive" href="ca-nhan.html">Tài khoản cá nhân</a>
+        </div>
+        <div class="cp-layout">
+          <aside class="cp-sidebar">
+            <div class="cp-sidenav" role="navigation" aria-label="Menu tài khoản">
+              <button class="cp-nav-item active" onclick="switchTab('info', this)" id="cpNavInfo">
+                <svg class="cp-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="8" r="4" />
+                  <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+                </svg>
+                Hồ sơ cá nhân
+              </button>
+              <button class="cp-nav-item" onclick="switchTab('coupons', this)" id="cpNavcoupons">
+                <svg class="cp-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <path
+                    d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                </svg>
+                Yêu thích
+              </button>
+              <button class="cp-nav-item" onclick="switchTab('history', this)" id="cpNavHistory">
+                <svg class="cp-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M12 7v5l3 3" />
+                </svg>
+                Lịch sử
+              </button>
+              <button class="cp-nav-item" onclick="switchTab('password', this)" id="cpNavSettings">
+                <svg class="cp-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="3" />
+                  <path
+                    d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+                Đổi mật khẩu
+              </button>
+              <button class="cp-nav-item cp-nav-logout" onclick="doLogout()">
+                <svg class="cp-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                  <polyline points="16 17 21 12 16 7" />
+                  <line x1="21" y1="12" x2="9" y2="12" />
+                </svg>
+                Đăng xuất
+              </button>
+            </div>
+          </aside>
+
+          <div class="cp-main">
+            <div class="cp-profile cp-profile-main">
+              <div class="cp-avatar-wrap">
+                <div class="cp-avatar" id="cpAvatar">
+                  <span id="cpAvatarInitial">U</span>
+                </div>
+                <label class="cp-avatar-edit" for="avatarInput" title="Đổi ảnh">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                    <circle cx="12" cy="13" r="4" />
+                  </svg>
+                </label>
+                <input type="file" id="avatarInput" accept="image/*" style="display:none" onchange="changeAvatar(this)">
+              </div>
+              <div class="cp-profile-info">
+                <div class="cp-profile-name" id="cpSidebarName">—</div>
+                <span class="cp-verify-badge cp-verify-badge-unverified" id="cpVerifyBadge">Chưa xác thực</span>
+                <button class="cp-avatar-save-btn" type="button" onclick="saveAvatarChanges()" id="cpAvatarSaveBtn"
+                  disabled>
+                  Lưu thay đổi
+                </button>
+              </div>
+            </div>
+
+            <div class="cp-tab active" id="tab-info">
+              <div class="cp-card">
+                <div class="cp-card-header">
+                  <h2>Hồ sơ cá nhân</h2>
+                  <p>Cập nhật thông tin tài khoản và liên hệ của bạn.</p>
+                </div>
+
+                <div class="cp-form-grid">
+                  <div class="cp-field">
+                    <label for="infoName">Họ và tên</label>
+                    <input id="infoName" type="text" placeholder="Nhập họ và tên">
+                  </div>
+                  <div class="cp-field">
+                    <label for="infoEmail">Email</label>
+                    <input id="infoEmail" type="email" readonly>
+                  </div>
+                  <div class="cp-field">
+                    <label for="infoPhone">Số điện thoại</label>
+                    <input id="infoPhone" type="text" placeholder="Nhập số điện thoại">
+                  </div>
+                  <div class="cp-field">
+                    <label for="infoDob">Ngày sinh</label>
+                    <input id="infoDob" type="date">
+                  </div>
+                  <div class="cp-field cp-field-full">
+                    <label for="infoAddress">Địa chỉ</label>
+                    <input id="infoAddress" type="text" placeholder="Nhập địa chỉ liên hệ">
+                  </div>
+                </div>
+
+                <div class="cp-form-actions">
+                  <button class="cp-btn-save" type="button" onclick="saveInfo()">Lưu thay đổi</button>
+                  <div class="cp-success-msg" id="infoSuccess">Đã lưu thông tin</div>
+                </div>
+              </div>
+
+            </div>
+
+            <div class="cp-tab" id="tab-coupons" style="display:none">
+              <div class="cp-card">
+                <div class="cp-card-header">
+                  <h2>Tour yêu thích</h2>
+                  <p>Danh sách tour bạn đã thêm vào yêu thích.</p>
+                </div>
+                <div id="cpWishlistGrid" class="tours-grid"></div>
+                <div class="cp-empty" id="cpWishlistEmpty" style="display:none">
+                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ddd" stroke-width="1.5"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path
+                      d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                  </svg>
+                  <p>Chưa có tour yêu thích nào</p>
+                  <span>Nhấn ♡ trên các tour để thêm vào đây!</span>
+                  <a href="diem-den.html" class="cp-explore-btn" style="margin-top:16px">Khám phá tour →</a>
+                </div>
+              </div>
+            </div>
+
+            <div class="cp-tab" id="tab-history" style="display:none">
+              <div class="cp-card">
+                <div class="cp-card-header">
+                  <h2>Lịch sử đặt tour</h2>
+                  <p>Danh sách các tour bạn đã đặt trước đây.</p>
+                </div>
+                <div id="cpHistoryList"></div>
+                <div class="cp-empty" id="cpHistoryEmpty" style="display:none">
+                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ddd" stroke-width="1.5"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 7v5l3 3" />
+                  </svg>
+                  <p>Bạn chưa có lịch sử đặt tour nào</p>
+                  <a href="tour-du-lich.html" class="cp-explore-btn" style="margin-top:16px">Khám phá tour →</a>
+                </div>
+              </div>
+            </div>
+
+            <div class="cp-tab" id="tab-password" style="display:none">
+              <div class="cp-card">
+                <div class="cp-card-header">
+                  <h2>Đổi mật khẩu</h2>
+                  <p>Cập nhật mật khẩu đăng nhập của bạn.</p>
+                </div>
+                <div class="cp-form-grid">
+                  <div class="cp-field cp-field-full">
+                    <label for="pwdCurrent">Mật khẩu hiện tại</label>
+                    <div class="cp-input-wrap">
+                      <input id="pwdCurrent" type="password" placeholder="Nhập mật khẩu hiện tại">
+                      <button type="button" class="cp-eye" onclick="togglePwd('pwdCurrent', this)" tabindex="-1"
+                        aria-label="Hiện mật khẩu">
+                        <svg viewBox="0 0 20 20" fill="none" width="16" height="16">
+                          <path d="M2 10s3-6 8-6 8 6 8 6-3 6-8 6-8-6-8-6Z" stroke="currentColor" stroke-width="1.5" />
+                          <circle cx="10" cy="10" r="2.5" stroke="currentColor" stroke-width="1.5" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="cp-field">
+                    <label for="pwdNew">Mật khẩu mới</label>
+                    <div class="cp-input-wrap">
+                      <input id="pwdNew" type="password" placeholder="Nhập mật khẩu mới"
+                        oninput="checkPwdStrength(this.value)">
+                      <button type="button" class="cp-eye" onclick="togglePwd('pwdNew', this)" tabindex="-1"
+                        aria-label="Hiện mật khẩu">
+                        <svg viewBox="0 0 20 20" fill="none" width="16" height="16">
+                          <path d="M2 10s3-6 8-6 8 6 8 6-3 6-8 6-8-6-8-6Z" stroke="currentColor" stroke-width="1.5" />
+                          <circle cx="10" cy="10" r="2.5" stroke="currentColor" stroke-width="1.5" />
+                        </svg>
+                      </button>
+                    </div>
+                    <ul class="cp-pwd-rules" id="pwdRulesList">
+                      <li id="pwdRuleLength">6-50 ký tự</li>
+                      <li id="pwdRuleLower">Ít nhất 1 chữ thường (a-z)</li>
+                      <li id="pwdRuleUpper">Ít nhất 1 chữ in hoa (A-Z)</li>
+                      <li id="pwdRuleSymbol">Ít nhất 1 ký tự đặc biệt</li>
+                    </ul>
+                  </div>
+                  <div class="cp-field">
+                    <label for="pwdConfirm">Xác nhận mật khẩu</label>
+                    <div class="cp-input-wrap">
+                      <input id="pwdConfirm" type="password" placeholder="Nhập lại mật khẩu mới">
+                      <button type="button" class="cp-eye" onclick="togglePwd('pwdConfirm', this)" tabindex="-1"
+                        aria-label="Hiện mật khẩu">
+                        <svg viewBox="0 0 20 20" fill="none" width="16" height="16">
+                          <path d="M2 10s3-6 8-6 8 6 8 6-3 6-8 6-8-6-8-6Z" stroke="currentColor" stroke-width="1.5" />
+                          <circle cx="10" cy="10" r="2.5" stroke="currentColor" stroke-width="1.5" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div class="cp-form-actions">
+                  <button class="cp-btn-save" type="button" onclick="changePassword()">Đổi mật khẩu</button>
+                  <div class="cp-success-msg" id="pwdSuccess">Đã cập nhật mật khẩu</div>
+                </div>
+                <div class="cp-error-msg" id="pwdError"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+
+    <div class="toast" id="toast"></div>
+    <div data-shared-footer></div>
+
+    <script src="./js/config.js"></script>
+    <script src="./js/api.js"></script>
+    <script src="./js/nav.js"></script>
+    <script src="./js/footer.js"></script>
+    <script src="./js/toast.js"></script>
+    <script src="./js/favouites.js"></script>
+    <script src="./js/recommend.js"></script>
+    <script src="./js/ca-nhan.js"></script>
+  </body>
+
+</html>

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ưu Đãi Đặc Biệt – VietnamTravel</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
+    <link rel="stylesheet" href="./css/bass.css">
+    <link rel="stylesheet" href="./css/nav.css">
+    <link rel="stylesheet" href="./css/home.css">
+    <link rel="stylesheet" href="./css/uu-dai.css">
+  </head>
+
+  <body>
+    <main id="page-uu-dai" class="ud-page">
+      <div class="tl-breadcrumb">
+        <a href="index.html">Trang chủ</a> <span>›</span>
+        <a id="tlBreadActive" href="uu-dai.html">Ưu đãi</a>
+      </div>
+
+      <section class="ud-section ud-metrics-section">
+        <div class="ud-metrics-grid">
+          <article class="ud-metric-card">
+            <span class="ud-metric-label">Tổng mã</span>
+            <strong id="couponCount">0</strong>
+          </article>
+          <article class="ud-metric-card">
+            <span class="ud-metric-label">Mã giảm cao nhất</span>
+            <strong id="topCouponValue">0đ</strong>
+          </article>
+          <article class="ud-metric-card">
+            <span class="ud-metric-label">Hạn gần nhất</span>
+            <strong id="nearestExpiry">--</strong>
+          </article>
+        </div>
+      </section>
+
+      <section class="ud-section ud-coupon-section">
+        <div class="ud-section-header ud-section-header-stack">
+          <div>
+            <span class="ud-section-eyebrow">Voucher</span>
+            <h2>Mã Giảm Giá</h2>
+          </div>
+          <div class="ud-tools">
+            <div class="ud-search-box">
+              <input id="couponSearch" type="search" placeholder="Tìm mã, ví dụ: YEAR2027" autocomplete="off">
+            </div>
+            <select id="couponSort" class="ud-sort-select" aria-label="Sắp xếp mã giảm giá">
+              <option value="latest">Mới nhất</option>
+              <option value="expiring">Sắp hết hạn</option>
+              <option value="discount-desc">Giảm cao nhất</option>
+              <option value="min-order-asc">Mức chi tiêu thấp nhất</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="couponStatus" class="ud-status-card">Đang tải mã ưu đãi...</div>
+        <div id="couponGrid" class="ud-coupon-grid" aria-live="polite"></div>
+        <div id="couponPagination" class="ud-pagination" aria-label="Phân trang mã ưu đãi"></div>
+      </section>
+    </main>
+
+    <div id="toast" class="toast"></div>
+
+    <div data-shared-footer></div>
+
+    <script src="./js/config.js"></script>
+    <script src="./js/api.js"></script>
+    <script src="./js/toast.js"></script>
+    <script src="./js/nav.js"></script>
+    <script src="./js/footer.js"></script>
+    <script src="./js/uu-dai.js"></script>
+  </body>
+
+</html>

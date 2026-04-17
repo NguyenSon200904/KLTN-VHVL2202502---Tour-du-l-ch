@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trang Chủ – VietnamTravel</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
+    <link rel="stylesheet" href="./css/bass.css">
+    <link rel="stylesheet" href="./css/nav.css">
+    <link rel="stylesheet" href="./css/home.css">
+    <link rel="stylesheet" href="./css/components.css">
+  </head>
+
+  <body>
+
+    <!-- ============ PAGE: HOME ============ -->
+    <div id="page-home">
+      <section class="hero">
+        <div class="hero-bg"></div>
+        <div class="hero-content">
+          <span class="hero-badge">✦ Khám phá Du Lịch</span>
+          <h1>Trải Nghiệm Chân Thực<br>Tại Việt Nam Xinh Đẹp</h1>
+          <p>Từ những dãy núi mờ sương ở Sapa đến làn nước xanh ngắt của Phú Quốc,<br>hãy bắt đầu hành trình hoàn hảo
+            cho bạn.</p>
+          <div class="search-bar">
+            <input type="text" id="searchDest" placeholder="Bạn muốn đi đâu?" oninput="liveSearch()">
+            <button class="search-btn" onclick="doSearch()">🔍 Tìm kiếm</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- SEARCH RESULTS -->
+      <section id="searchResultSection" style="display:none; padding-top: 40px;">
+        <div class="section-header">
+          <div>
+            <div class="section-tag">Kết quả tìm kiếm</div>
+            <h2 class="section-title" id="searchResultTitle">Tìm thấy ... tour</h2>
+          </div>
+          <button class="view-all" onclick="clearSearch()">✕ Xóa tìm kiếm</button>
+        </div>
+        <div class="tours-grid" id="searchResultGrid"></div>
+        <div id="searchEmpty" style="display:none; text-align:center; padding: 60px 20px; color: var(--muted);">
+          <div style="font-size:3rem; margin-bottom:16px;">🔍</div>
+          <p style="font-size:1rem; font-weight:600; color:var(--dark); margin-bottom:8px;">Không tìm thấy tour phù hợp
+          </p>
+          <p style="font-size:0.875rem;">Thử từ khóa khác như "Hạ Long", "Sapa", "Hội An"</p>
+        </div>
+      </section>
+
+      <!-- DESTINATIONS -->
+      <section class="destinations" id="destSection">
+        <div class="section-header">
+          <div>
+            <div class="section-tag">Cảm hứng du lịch</div>
+            <h2 class="section-title">Danh Mục</h2>
+          </div>
+          <div class="dest-nav">
+            <button onclick="scrollDest(-1)">←</button>
+            <button onclick="scrollDest(1)">→</button>
+          </div>
+        </div>
+        <div class="dest-grid" id="destGrid">
+          <div class="dest-card" onclick="filterByDest('halong')" data-dest="halong">
+            <div class="dest-thumb">
+              <div class="dest-thumb-inner d1"></div>
+            </div>
+            <div class="dest-label">Hạ Long</div>
+          </div>
+          <div class="dest-card" onclick="filterByDest('hanoi')" data-dest="hanoi">
+            <div class="dest-thumb">
+              <div class="dest-thumb-inner d2"></div>
+            </div>
+            <div class="dest-label">Hà Nội</div>
+          </div>
+          <div class="dest-card" onclick="filterByDest('danang')" data-dest="danang">
+            <div class="dest-thumb">
+              <div class="dest-thumb-inner d3"></div>
+            </div>
+            <div class="dest-label">Đà Nẵng</div>
+          </div>
+          <div class="dest-card" onclick="filterByDest('hoian')" data-dest="hoian">
+            <div class="dest-thumb">
+              <div class="dest-thumb-inner d4"></div>
+            </div>
+            <div class="dest-label">Hội An</div>
+          </div>
+          <div class="dest-card" onclick="filterByDest('sapa')" data-dest="sapa">
+            <div class="dest-thumb">
+              <div class="dest-thumb-inner d5"></div>
+            </div>
+            <div class="dest-label">Lào Cai</div>
+          </div>
+          <div class="dest-card" onclick="filterByDest('phuquoc')" data-dest="phuquoc">
+            <div class="dest-thumb">
+              <div class="dest-thumb-inner d8"></div>
+            </div>
+            <div class="dest-label">Phú Quốc</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- FILTER BANNER -->
+      <div id="filterBanner" class="filter-banner" style="display:none;">
+        <span id="filterBannerText"></span>
+        <button onclick="clearFilter()" class="filter-clear-btn">✕ Xem tất cả</button>
+      </div>
+
+      <!-- TOURS -->
+      <section id="tourSection">
+        <div class="section-header">
+          <div>
+            <div class="section-tag">Dành cho bạn</div>
+            <h2 class="section-title tour-title-green">Tour Gợi Ý</h2>
+            <p class="tours-desc">Những trải nghiệm được chuyên gia địa phương lựa chọn kỹ lưỡng cho sự cân bằng hoàn
+              hảo giữa sang trọng và văn hóa.</p>
+          </div>
+          <a class="view-all" href="tour-du-lich.html">Xem tất cả các tour →</a>
+        </div>
+        <div class="tours-grid" id="tourGrid"></div>
+        <div id="filterEmpty" style="display:none; text-align:center; padding: 60px 20px; color: var(--muted);">
+          <div style="font-size:3rem; margin-bottom:16px;">🗺️</div>
+          <p style="font-size:1rem; font-weight:600; color:var(--dark); margin-bottom:8px;">Chưa có tour cho điểm đến
+            này</p>
+          <p style="font-size:0.875rem;">Chúng tôi đang cập nhật thêm. Xem các tour khác nhé!</p>
+          <button onclick="clearFilter()"
+            style="margin-top:16px; background:var(--green); color:white; border:none; padding:10px 24px; border-radius:8px; cursor:pointer; font-family:inherit; font-weight:600;">Xem
+            tất cả tour</button>
+        </div>
+      </section>
+
+
+      <!-- ===== GỢI Ý CÁ NHÂN HÓA ===== -->
+      <section id="recSection" style="display:none; padding-top:0;">
+        <div class="section-header">
+          <div>
+            <div class="section-tag">Dành riêng cho bạn</div>
+            <h2 class="section-title" id="recSubtitle">Tour gợi ý</h2>
+          </div>
+        </div>
+        <div class="tours-grid" id="recGrid"></div>
+      </section>
+
+      <div data-shared-footer></div>
+      <!-- TOAST -->
+      <div class="toast" id="toast"></div>
+
+      <script src="./js/config.js"></script>
+      <script src="./js/api.js"></script>
+      <script src="./js/nav.js"></script>
+      <script src="./js/footer.js"></script>
+      <script src="./js/home.js"></script>
+      <script src="./js/toast.js"></script>
+      <script src="./js/booking.js"></script>
+      <script src="./js/favouites.js"></script>
+      <script>
+        window.addEventListener('DOMContentLoaded', () => {
+          // Kiểm tra và hiển thị toast nếu vừa đăng nhập
+          if (typeof checkLoginToast === 'function') checkLoginToast();
+
+          // Gọi API
+          if (typeof loadTours === 'function') loadTours();
+          if (typeof loadCategories === 'function') loadCategories();
+          if (typeof initSearchData === 'function') initSearchData();
+          // Fallback local nếu chưa có API
+          if (typeof renderTours === 'function' && typeof getActiveTours === 'function') {
+            renderTours(getActiveTours().slice(0, 6), 'tourGrid');
+          }
+
+          // Gợi ý cá nhân hóa — chỉ khi user đã login
+          if (localStorage.getItem('vt_access_token')) {
+            setTimeout(async function () {
+              await loadMe();
+              var u = JSON.parse(localStorage.getItem('vt_user') || 'null');
+              if (u) {
+                var recTours = recGetTours(4);
+                if (recTours.length) {
+                  document.getElementById('recSection').style.display = 'block';
+                  recRender('recGrid');
+                  var name = u.name ? u.name.split(' ').slice(-1)[0] : '';
+                  if (name) document.getElementById('recSubtitle').textContent = 'Dựa trên sở thích của ' + name;
+                }
+              }
+            }, 300);
+          }
+          document.querySelectorAll('.dest-card').forEach((el, i) => {
+            el.style.opacity = '0'; el.style.transform = 'translateY(20px)';
+            el.style.transition = `opacity .5s ease ${i * 60}ms, transform .5s ease ${i * 60}ms`;
+          });
+          const obs = new IntersectionObserver(entries => entries.forEach(e => {
+            if (e.isIntersecting) { e.target.style.opacity = '1'; e.target.style.transform = 'translateY(0)'; }
+          }), { threshold: 0.1 });
+          document.querySelectorAll('.dest-card').forEach(el => obs.observe(el));
+        });
+      </script>
+    </div>
+  </body>
+
+</html>

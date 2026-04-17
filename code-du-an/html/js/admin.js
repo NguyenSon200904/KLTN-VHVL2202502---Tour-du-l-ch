@@ -1,0 +1,5520 @@
+// ============================================================
+// 3admin.js
+// ============================================================
+
+// ===== SWITCH TAB =====
+function switchTab(name) {
+  document.querySelectorAll('.admin-tab').forEach(function (t) { t.classList.remove('active'); t.style.display = 'none'; });
+  document.querySelectorAll('.admin-nav-item').forEach(function (a) { a.classList.remove('active'); });
+  var tab = document.getElementById('tab-' + name);
+  var nav = document.getElementById('aNav-' + name);
+  if (tab) { tab.classList.add('active'); tab.style.display = 'flex'; }
+  if (nav) nav.classList.add('active');
+
+  // Keep active tab in query params so reload keeps current tab.
+  try {
+    if (tab) {
+      var url = new URL(window.location.href);
+      url.searchParams.set('tab', name);
+      window.history.replaceState({}, '', url.toString());
+    }
+  } catch (e) { }
+
+  if (name === 'tours') adminRenderTours();
+  if (name === 'tours') adminRenderPromoPreview();
+  if (name === 'users') renderUsersTable();
+  if (name === 'dashboard') adminUpdateDashStats();
+  if (name === 'settings') adminSettingsInit();
+}
+
+// ===== SETTINGS (ADMIN/EMPLOYEE) =====
+var ADMIN_SETTINGS_LOADING = false;
+var ADMIN_PENDING_AVATAR_FILE = null;
+var ADMIN_PENDING_AVATAR_PREVIEW = '';
+
+function adminSettingsLoadUser() {
+  try {
+    return JSON.parse(localStorage.getItem('vt_user') || sessionStorage.getItem('vt_user') || 'null');
+  } catch (_) {
+    return null;
+  }
+}
+
+function adminSettingsSaveUser(user) {
+  if (!user || typeof user !== 'object') return;
+  localStorage.setItem('vt_user', JSON.stringify(user));
+}
+
+function adminSettingsFill(user) {
+  var setValue = function (id, value) {
+    var el = document.getElementById(id);
+    if (el) el.value = value || '';
+  };
+
+  setValue('adminInfoName', user?.name || user?.full_name || '');
+  setValue('adminInfoEmail', user?.email || '');
+  setValue('adminInfoPhone', user?.phone || '');
+  setValue('adminInfoDob', user?.dob ? String(user.dob).slice(0, 10) : '');
+  setValue('adminInfoAddress', user?.address || '');
+
+  adminSettingsRenderAvatar(user || {});
+}
+
+function adminSettingsRenderAvatar(user) {
+  var name = String(user?.name || user?.full_name || 'Admin').trim();
+  var email = String(user?.email || '').trim();
+  var avatar = String(user?.avatar || '').trim();
+  var initial = (name || 'A').charAt(0).toUpperCase();
+
+  var cardAvatar = document.getElementById('adminSettingsAvatar');
+  var cardInitial = document.getElementById('adminSettingsAvatarInitial');
+  var cardName = document.getElementById('adminSettingsName');
+  var cardEmail = document.getElementById('adminSettingsEmail');
+  var sideAvatar = document.getElementById('sideUserAvatar');
+
+  if (cardName) cardName.textContent = name || '—';
+  if (cardEmail) cardEmail.textContent = email || '—';
+
+  if (avatar) {
+    if (cardAvatar) {
+      cardAvatar.style.backgroundImage = 'url(' + avatar + ')';
+      cardAvatar.style.backgroundSize = 'cover';
+      cardAvatar.style.backgroundPosition = 'center';
+      cardAvatar.style.backgroundRepeat = 'no-repeat';
+    }
+    if (cardInitial) cardInitial.style.display = 'none';
+
+    if (sideAvatar) {
+      sideAvatar.style.backgroundImage = 'url(' + avatar + ')';
+      sideAvatar.style.backgroundSize = 'cover';
+      sideAvatar.style.backgroundPosition = 'center';
+      sideAvatar.style.backgroundRepeat = 'no-repeat';
+      sideAvatar.textContent = '';
+    }
+    return;
+  }
+
+  if (cardAvatar) {
+    cardAvatar.style.backgroundImage = '';
+    cardAvatar.style.background = 'linear-gradient(135deg, #2d8a4e, #3aaa62)';
+  }
+  if (cardInitial) {
+    cardInitial.style.display = '';
+    cardInitial.textContent = initial;
+  }
+
+  if (sideAvatar) {
+    sideAvatar.style.backgroundImage = '';
+    sideAvatar.textContent = initial;
+  }
+}
+
+function adminSetAvatarSaveButton(enabled, text) {
+  var btn = document.getElementById('adminAvatarSaveBtn');
+  if (!btn) return;
+  btn.disabled = !enabled;
+  btn.textContent = text || 'Lưu ảnh đại diện';
+}
+
+function adminChangeAvatar(input) {
+  if (!input || !input.files || !input.files[0]) return;
+
+  ADMIN_PENDING_AVATAR_FILE = input.files[0];
+
+  var reader = new FileReader();
+  reader.onload = function (e) {
+    ADMIN_PENDING_AVATAR_PREVIEW = e.target.result || '';
+
+    var cardAvatar = document.getElementById('adminSettingsAvatar');
+    var cardInitial = document.getElementById('adminSettingsAvatarInitial');
+    if (cardAvatar && ADMIN_PENDING_AVATAR_PREVIEW) {
+      cardAvatar.style.backgroundImage = 'url(' + ADMIN_PENDING_AVATAR_PREVIEW + ')';
+      cardAvatar.style.backgroundSize = 'cover';
+      cardAvatar.style.backgroundPosition = 'center';
+      cardAvatar.style.backgroundRepeat = 'no-repeat';
+    }
+    if (cardInitial) cardInitial.style.display = 'none';
+
+    adminSetAvatarSaveButton(true);
+  };
+  reader.readAsDataURL(ADMIN_PENDING_AVATAR_FILE);
+}
+
+async function adminSaveAvatarChanges() {
+  if (!ADMIN_PENDING_AVATAR_FILE) {
+    showToast('⚠️ Chưa có ảnh đại diện mới để lưu');
+    return;
+  }
+
+  adminSetAvatarSaveButton(false, 'Đang lưu...');
+
+  try {
+    var res = await apiUpdateAvatar(ADMIN_PENDING_AVATAR_FILE);
+    if (!(res && res.ok)) {
+      showToast('❌ Cập nhật ảnh đại diện thất bại');
+      adminSetAvatarSaveButton(true);
+      return;
+    }
+
+    var user = adminSettingsLoadUser() || {};
+    user.avatar = res?.data?.result?.avatar_url || ADMIN_PENDING_AVATAR_PREVIEW || user.avatar || '';
+    adminSettingsSaveUser(user);
+    adminSettingsRenderAvatar(user);
+
+    ADMIN_PENDING_AVATAR_FILE = null;
+    ADMIN_PENDING_AVATAR_PREVIEW = '';
+    var input = document.getElementById('adminAvatarInput');
+    if (input) input.value = '';
+
+    adminSetAvatarSaveButton(false);
+    showToast('✅ Đã cập nhật ảnh đại diện');
+  } catch (_) {
+    showToast('❌ Không thể kết nối máy chủ');
+    adminSetAvatarSaveButton(true);
+  }
+}
+
+async function adminSettingsInit() {
+  if (ADMIN_SETTINGS_LOADING) return;
+  ADMIN_SETTINGS_LOADING = true;
+
+  var user = adminSettingsLoadUser();
+  if (user) adminSettingsFill(user);
+
+  try {
+    var res = await apiGetMe();
+    if (res && res.ok) {
+      var me = res?.data?.result?.user || res?.data?.result || {};
+      var merged = {
+        ...(user || {}),
+        name: me.full_name || me.name || user?.name || '',
+        full_name: me.full_name || me.name || user?.full_name || '',
+        email: me.email || user?.email || '',
+        phone: me.phone || user?.phone || '',
+        dob: me.date_of_birth ? String(me.date_of_birth).slice(0, 10) : (user?.dob || ''),
+        address: me.address || user?.address || '',
+        avatar: me.avatar || user?.avatar || ''
+      };
+      adminSettingsSaveUser(merged);
+      adminSettingsFill(merged);
+    }
+  } catch (e) { }
+
+  adminCheckPwdStrength('');
+  adminSetAvatarSaveButton(false);
+  ADMIN_SETTINGS_LOADING = false;
+}
+
+function adminValidateFullName(fullName) {
+  var val = String(fullName || '').trim();
+  if (!val) return 'Tên là bắt buộc';
+  if (val.length < 2 || val.length > 100) return 'Độ dài tên phải từ 2 đến 100 ký tự';
+  if (!/^[\p{L}\s]+$/u.test(val)) return 'Tên chỉ có thể chứa chữ cái và khoảng trắng';
+  return '';
+}
+
+function adminValidatePhone(phone) {
+  var val = String(phone || '').trim();
+  if (!val) return '';
+  if (!/^(?:\+84|0)\d{9,10}$/.test(val)) return 'Số điện thoại không hợp lệ';
+  return '';
+}
+
+function adminValidateAddress(address) {
+  var val = String(address || '').trim();
+  if (!val) return '';
+  if (val.length < 5 || val.length > 300) return 'Độ dài địa chỉ phải từ 5 đến 300 ký tự';
+  return '';
+}
+
+function adminTranslateValidationMessage(msg) {
+  if (!msg || typeof msg !== 'string') return 'Cập nhật thông tin thất bại';
+
+  var map = {
+    'Name is required': 'Tên là bắt buộc',
+    'Name must be a string': 'Tên phải là một chuỗi',
+    'Name length must be from 2 to 100': 'Độ dài tên phải từ 2 đến 100 ký tự',
+    'Name can only contain letters and spaces': 'Tên chỉ có thể chứa chữ cái và khoảng trắng',
+    'Phone must be string': 'Số điện thoại phải là một chuỗi',
+    'Phone is invalid': 'Số điện thoại không hợp lệ',
+    'Phone is invalid or existed': 'Số điện thoại không hợp lệ hoặc đã tồn tại',
+    'Address must be string': 'Địa chỉ phải là một chuỗi',
+    'Address length must be from 5 to 300': 'Độ dài địa chỉ phải từ 5 đến 300 ký tự',
+    'Validation error': 'Dữ liệu không hợp lệ'
+  };
+
+  return map[msg] || msg;
+}
+
+function adminExtractApiErrorMessage(res, preferredFields) {
+  if (!res) return 'Cập nhật thông tin thất bại';
+
+  var errors = res?.data?.errors;
+  if (errors && typeof errors === 'object') {
+    var fieldOrder = Array.isArray(preferredFields)
+      ? preferredFields
+      : preferredFields
+        ? [preferredFields]
+        : [];
+
+    for (var i = 0; i < fieldOrder.length; i++) {
+      var field = fieldOrder[i];
+      if (errors[field]?.msg) {
+        return adminTranslateValidationMessage(errors[field].msg);
+      }
+    }
+
+    var firstError = Object.values(errors)[0];
+    if (firstError?.msg) {
+      return adminTranslateValidationMessage(firstError.msg);
+    }
+  }
+
+  return adminTranslateValidationMessage(res?.data?.message || 'Cập nhật thông tin thất bại');
+}
+
+async function adminSaveMyProfile() {
+  var user = adminSettingsLoadUser();
+  if (!user) {
+    showToast('⚠️ Phiên đăng nhập không hợp lệ');
+    return;
+  }
+
+  var saveBtn = document.getElementById('adminInfoSaveBtn');
+  var okEl = document.getElementById('adminInfoSuccess');
+  if (okEl) okEl.style.display = 'none';
+
+  var name = String(document.getElementById('adminInfoName')?.value || '').trim();
+  var phone = String(document.getElementById('adminInfoPhone')?.value || '').trim();
+  var dob = String(document.getElementById('adminInfoDob')?.value || '');
+  var address = String(document.getElementById('adminInfoAddress')?.value || '').trim();
+
+  var currentName = String(user.name || user.full_name || '').trim();
+  var currentPhone = String(user.phone || '').trim();
+  var currentDob = String(user.dob || '').slice(0, 10);
+  var currentAddress = String(user.address || '').trim();
+
+  var dobISO = undefined;
+  if (dob && dob !== currentDob) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dob)) {
+      showToast('⚠️ Ngày sinh không hợp lệ');
+      return;
+    }
+    dobISO = dob + 'T00:00:00.000Z';
+  }
+
+  var nameErr = adminValidateFullName(name);
+  if (nameErr) return showToast('⚠️ ' + nameErr);
+  var phoneErr = adminValidatePhone(phone);
+  if (phoneErr) return showToast('⚠️ ' + phoneErr);
+  var addressErr = adminValidateAddress(address);
+  if (addressErr) return showToast('⚠️ ' + addressErr);
+
+  var payload = {};
+  if (name !== currentName) payload.full_name = name;
+  if (dobISO) payload.date_of_birth = dobISO;
+  if (phone !== currentPhone) payload.phone = phone;
+  if (address !== currentAddress) {
+    if (address) payload.address = address;
+  }
+
+  if (!Object.keys(payload).length) {
+    showToast('⚠️ Không có thay đổi để lưu');
+    return;
+  }
+
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Đang lưu...';
+  }
+
+  try {
+    var res = await apiUpdateMe(payload);
+    if (!(res && res.ok)) {
+      var errorMsg = adminExtractApiErrorMessage(res, ['full_name', 'phone', 'address', 'date_of_birth']);
+      showToast('❌ ' + errorMsg);
+      return;
+    }
+
+    var nextUser = {
+      ...user,
+      name: payload.full_name !== undefined ? name : currentName,
+      full_name: payload.full_name !== undefined ? name : (user.full_name || currentName),
+      phone: payload.phone !== undefined ? phone : currentPhone,
+      address: payload.address !== undefined ? address : currentAddress,
+      dob: payload.date_of_birth !== undefined ? dob : currentDob,
+    };
+    adminSettingsSaveUser(nextUser);
+    adminSettingsRenderAvatar(nextUser);
+
+    var sideName = document.getElementById('sideUserName');
+    if (sideName) sideName.textContent = nextUser.name || 'Admin';
+
+    if (okEl) {
+      okEl.style.display = 'inline-flex';
+      setTimeout(function () { okEl.style.display = 'none'; }, 2600);
+    }
+    showToast('✅ Đã lưu thông tin cá nhân');
+  } catch (e) {
+    showToast('❌ Không thể kết nối máy chủ');
+  } finally {
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Lưu thay đổi';
+    }
+  }
+}
+
+function adminTogglePwd(inputId, btn) {
+  var input = document.getElementById(inputId);
+  if (!input) return;
+
+  input.type = input.type === 'password' ? 'text' : 'password';
+
+  if (!btn) return;
+  var svg = btn.querySelector('svg');
+  if (!svg) return;
+
+  var isHidden = input.type === 'password';
+  svg.setAttribute('viewBox', '0 0 20 20');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('width', '16');
+  svg.setAttribute('height', '16');
+
+  if (isHidden) {
+    svg.innerHTML =
+      '<path d="M2 10s3-6 8-6 8 6 8 6-3 6-8 6-8-6-8-6Z" stroke="currentColor" stroke-width="1.5" />' +
+      '<circle cx="10" cy="10" r="2.5" stroke="currentColor" stroke-width="1.5" />';
+    btn.setAttribute('aria-label', 'Hiện mật khẩu');
+  } else {
+    svg.innerHTML =
+      '<path d="M2 10s3-6 8-6 8 6 8 6-3 6-8 6-8-6-8-6Z" stroke="currentColor" stroke-width="1.5" />' +
+      '<circle cx="10" cy="10" r="2.5" stroke="currentColor" stroke-width="1.5" />' +
+      '<path d="M3 17L17 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />';
+    btn.setAttribute('aria-label', 'Ẩn mật khẩu');
+  }
+}
+
+function adminGetPasswordRequirementStatus(value) {
+  var v = String(value || '');
+  return {
+    length: v.length >= 6 && v.length <= 50,
+    lower: /[a-z]/.test(v),
+    upper: /[A-Z]/.test(v),
+    symbol: /[^A-Za-z0-9]/.test(v)
+  };
+}
+
+function adminCheckPwdStrength(value) {
+  var status = adminGetPasswordRequirementStatus(value);
+  var map = {
+    adminPwdRuleLength: status.length,
+    adminPwdRuleLower: status.lower,
+    adminPwdRuleUpper: status.upper,
+    adminPwdRuleSymbol: status.symbol
+  };
+  Object.keys(map).forEach(function (id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.classList.toggle('ok', !!map[id]);
+  });
+}
+
+function adminShowPwdErr(message) {
+  var errEl = document.getElementById('adminPwdError');
+  if (!errEl) return;
+  errEl.textContent = message;
+  errEl.style.display = 'block';
+}
+
+function adminExtractChangePasswordErrorMessage(res) {
+  if (!res) return 'Đổi mật khẩu thất bại.';
+  var status = Number(res.status || 0);
+  var message = String(res?.data?.message || '').trim();
+  var upperMessage = message.toUpperCase();
+
+  if (status === 401 || upperMessage.includes('PASSWORD_IS_INCORRECT')) return 'Mật khẩu hiện tại không đúng.';
+  if (status === 404 || upperMessage.includes('USER_NOT_FOUND')) return 'Không tìm thấy tài khoản người dùng.';
+  if (status === 400 || upperMessage.includes('NEW_PASSWORD_MUST_BE_DIFFERENT')) return 'Mật khẩu mới phải khác mật khẩu hiện tại.';
+  return message || 'Đổi mật khẩu thất bại. Vui lòng thử lại.';
+}
+
+async function adminChangePassword() {
+  var currentPassword = document.getElementById('adminPwdCurrent')?.value || '';
+  var newPassword = document.getElementById('adminPwdNew')?.value || '';
+  var confirmPassword = document.getElementById('adminPwdConfirm')?.value || '';
+
+  var okEl = document.getElementById('adminPwdSuccess');
+  var errEl = document.getElementById('adminPwdError');
+  var saveBtn = document.getElementById('adminPwdSaveBtn');
+  if (okEl) okEl.style.display = 'none';
+  if (errEl) errEl.style.display = 'none';
+
+  if (!currentPassword || !newPassword || !confirmPassword) {
+    return adminShowPwdErr('Vui lòng điền đầy đủ tất cả các trường.');
+  }
+
+  var req = adminGetPasswordRequirementStatus(newPassword);
+  if (!(req.length && req.lower && req.upper && req.symbol)) {
+    return adminShowPwdErr('Mật khẩu mới chưa đủ mạnh (6-50 ký tự, gồm chữ thường, chữ hoa và ký tự đặc biệt).');
+  }
+
+  if (newPassword === currentPassword) {
+    return adminShowPwdErr('Mật khẩu mới phải khác mật khẩu hiện tại.');
+  }
+
+  if (newPassword !== confirmPassword) {
+    return adminShowPwdErr('Mật khẩu xác nhận không khớp.');
+  }
+
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Đang cập nhật...';
+  }
+
+  try {
+    var res = await apiChangePassword(currentPassword, newPassword, confirmPassword);
+    if (!(res && res.ok)) {
+      return adminShowPwdErr(adminExtractChangePasswordErrorMessage(res));
+    }
+  } catch (_) {
+    return adminShowPwdErr('Không thể kết nối máy chủ.');
+  } finally {
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Đổi mật khẩu';
+    }
+  }
+
+  ['adminPwdCurrent', 'adminPwdNew', 'adminPwdConfirm'].forEach(function (id) {
+    var input = document.getElementById(id);
+    if (input) input.value = '';
+  });
+  adminCheckPwdStrength('');
+
+  if (okEl) okEl.style.display = 'inline-flex';
+  showToast('✅ Đổi mật khẩu thành công. Vui lòng đăng nhập lại.');
+
+  setTimeout(function () {
+    apiLogoutLocal();
+    window.location.href = 'dang-nhap.html';
+  }, 1200);
+}
+
+// ===== DASHBOARD STATS =====
+function adminUpdateDashStats() {
+  dashLoadDashboard();
+}
+
+// ===== USERS TABLE =====
+// ===== USERS MANAGEMENT =====
+var ADMIN_USER_PAGE = 1;
+var ADMIN_USER_PER = 20;
+var ADMIN_USER_ALL_LIMIT = 1000;
+var ADMIN_USER_SEARCH = '';
+var ADMIN_USER_ROLE = '';
+var ADMIN_USER_STATUS = '';
+
+function adminNormalizeUserRole(role) {
+  if (role === 1 || role === 'admin') return 1;
+  if (role === 2 || role === 'employee' || role === 'staff') return 2;
+  return 0;
+}
+
+function adminGetCurrentUserRole() {
+  var u = null;
+  try {
+    u = JSON.parse(localStorage.getItem('vt_user') || sessionStorage.getItem('vt_user') || 'null');
+  } catch (e) { u = null; }
+  return adminNormalizeUserRole((u && u.role) || 0);
+}
+
+function adminCanDeleteTours() {
+  return adminGetCurrentUserRole() !== 2;
+}
+
+function adminCanCreateTours() {
+  return adminGetCurrentUserRole() !== 2;
+}
+
+function adminNormalizeUserStatus(status, locked) {
+  if (locked === true) return 1;
+  if (status === 1 || status === '1' || status === 'banned' || status === 'locked' || status === true) return 1;
+  return 0;
+}
+
+function adminGetUserFilterState() {
+  return {
+    keyword: ADMIN_USER_SEARCH,
+    role: ADMIN_USER_ROLE,
+    status: ADMIN_USER_STATUS
+  };
+}
+
+function adminFilterUsersByState(list, filters) {
+  var items = Array.isArray(list) ? list.slice() : [];
+
+  if (filters.keyword) {
+    var q = filters.keyword.toLowerCase();
+    items = items.filter(function (u) {
+      return (u.name || u.full_name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q);
+    });
+  }
+
+  if (filters.role !== '') {
+    var roleFilter = parseInt(filters.role, 10);
+    items = items.filter(function (u) { return adminNormalizeUserRole(u.role) === roleFilter; });
+  }
+
+  if (filters.status !== '') {
+    var statusFilter = parseInt(filters.status, 10);
+    items = items.filter(function (u) { return adminNormalizeUserStatus(u.status, u.locked) === statusFilter; });
+  }
+
+  return items;
+}
+
+function adminGetCurrentUserIdentity() {
+  var u = null;
+  try {
+    u = JSON.parse(localStorage.getItem('vt_user') || sessionStorage.getItem('vt_user') || 'null');
+  } catch (e) { u = null; }
+  return {
+    id: (u && (u._id || u.id)) ? String(u._id || u.id) : '',
+    email: (u && u.email) ? String(u.email).toLowerCase() : ''
+  };
+}
+
+function adminTranslateUserRoleError(msg) {
+  var raw = String(msg || '').trim();
+  if (!raw) return 'Không thể cập nhật quyền người dùng';
+
+  var map = {
+    CANNOT_UPDATE_OWN_ROLE: 'Bạn không thể tự thay đổi quyền của chính mình.',
+    USER_NOT_FOUND: 'Không tìm thấy người dùng.',
+    NOT_ALLOWWED_TO_UPDATE_ADMIN_ROLE: 'Không được phép thay đổi quyền Quản trị viên.'
+  };
+  if (map[raw]) return map[raw];
+
+  var lower = raw.toLowerCase();
+  if (lower.includes('cannot update own role')) return 'Bạn không thể tự thay đổi quyền của chính mình.';
+  if (lower.includes('user not found')) return 'Không tìm thấy người dùng.';
+  if (lower.includes('admin role')) return 'Không được phép thay đổi quyền Quản trị viên.';
+
+  return raw;
+}
+
+function adminExtractUserRoleErrorMessage(res) {
+  if (!res || !res.data) return 'Không thể cập nhật quyền người dùng';
+  var data = res.data || {};
+
+  if (data.errors) {
+    var first = Object.values(data.errors)[0];
+    if (Array.isArray(first) && first.length) {
+      return adminTranslateUserRoleError(first[0].msg || first[0].message || first[0]);
+    }
+    if (first && (first.msg || first.message)) return adminTranslateUserRoleError(first.msg || first.message);
+    if (typeof first === 'string') return adminTranslateUserRoleError(first);
+  }
+
+  if (data.message) return adminTranslateUserRoleError(data.message);
+  if (data.error) return adminTranslateUserRoleError(data.error);
+  return 'Không thể cập nhật quyền người dùng';
+}
+
+async function renderUsersTable() {
+  var tbody = document.getElementById('usersTableBody');
+  var footer = document.getElementById('usersTableFooter');
+  if (!tbody) return;
+  var isEmployeeView = adminGetCurrentUserRole() === 2;
+  var colCount = isEmployeeView ? 6 : 7;
+
+  tbody.innerHTML = '<tr><td colspan="' + colCount + '" style="text-align:center;color:#aaa;padding:32px">Đang tải...</td></tr>';
+
+  var users = [];
+  var apiLoaded = false;
+  var filters = adminGetUserFilterState();
+  var useClientPagination = filters.status !== '';
+
+  // Thử API trước
+  try {
+    var params = {
+      page: useClientPagination ? 1 : ADMIN_USER_PAGE,
+      limit: useClientPagination ? ADMIN_USER_ALL_LIMIT : ADMIN_USER_PER,
+      keyword: filters.keyword
+    };
+    if (filters.role !== '') params.role = parseInt(filters.role, 10);
+    if (!useClientPagination && filters.status !== '') params.status = parseInt(filters.status, 10);
+
+    var res = await apiAdminGetUsers(params);
+    if (res && res.ok && res.data.result) {
+      users = res.data.result.users || res.data.result || [];
+      apiLoaded = true;
+    }
+  } catch (e) { }
+
+  // Fallback localStorage
+  if (!apiLoaded) {
+    try {
+      var raw = JSON.parse(localStorage.getItem('vt_userdb') || sessionStorage.getItem('vt_userdb') || '[]');
+      raw = adminFilterUsersByState(raw, filters);
+      var localTotal = raw.length;
+      var localStart = (ADMIN_USER_PAGE - 1) * ADMIN_USER_PER;
+      users = raw.slice(localStart, localStart + ADMIN_USER_PER);
+      if (footer) renderUsersPagination(localTotal, footer);
+    } catch (e) { }
+  } else if (useClientPagination) {
+    users = adminFilterUsersByState(users, filters);
+  }
+
+  if (!users.length) {
+    tbody.innerHTML = '<tr><td colspan="' + colCount + '" style="text-align:center;color:#aaa;padding:32px">Chưa có người dùng nào</td></tr>';
+    return;
+  }
+
+  var me = adminGetCurrentUserIdentity();
+  var totalForFooter = users.length;
+  var pagedUsers = users;
+
+  if (apiLoaded && !useClientPagination) {
+    var pagination = null;
+    try { pagination = (res && res.data && res.data.result && res.data.result.pagination) ? res.data.result.pagination : null; } catch (e) { pagination = null; }
+    if (pagination && footer) renderUsersPagination(pagination.total, footer);
+  } else if (footer) {
+    renderUsersPagination(totalForFooter, footer);
+  }
+
+  if (apiLoaded && useClientPagination) {
+    var clientStart = (ADMIN_USER_PAGE - 1) * ADMIN_USER_PER;
+    pagedUsers = users.slice(clientStart, clientStart + ADMIN_USER_PER);
+  }
+
+  tbody.innerHTML = pagedUsers.map(function (u, i) {
+    var id = u._id || u.id || i;
+    var name = u.full_name || u.name || '—';
+    var email = u.email || '—';
+    var phone = u.phone || '—';
+    var role = adminNormalizeUserRole(u.role);
+    var status = u.status; // 0=active, 1=banned (API) hoặc locked (local)
+    var isAdmin = role === 1;
+    var isEmployee = role === 2;
+    var isBanned = adminNormalizeUserStatus(status, u.locked) === 1;
+    var isSelf = (me.id && String(id) === me.id) || (me.email && String(email).toLowerCase() === me.email);
+
+    var roleBadge = isAdmin
+      ? '<span class="admin-badge-active">Quản trị viên</span>'
+      : isEmployee
+        ? '<span class="admin-badge-active" style="background:#e8f0ff;color:#3a7abf">Nhân viên</span>'
+        : '<span class="admin-badge-inactive" style="background:#f0f0f0;color:#888">Người dùng</span>';
+    var statusBadge = isBanned
+      ? '<span class="admin-badge-inactive">🔒 Bị khóa</span>'
+      : '<span class="admin-badge-active">✅ Hoạt động</span>';
+
+    var actionHtml = '<span style="font-size:0.75rem;color:#aaa">—</span>';
+    if (!isEmployeeView && !isAdmin && !isSelf) {
+      var nextRole = isEmployee ? 0 : 2;
+      var roleBtnLabel = isEmployee ? '→ Người dùng' : '→ Nhân viên';
+      var roleBtn = '<button class="admin-act-btn" data-id="' + id + '" data-role="' + nextRole + '" onclick="adminSetRoleBtn(this)">' + roleBtnLabel + '</button>';
+      var statusBtn = isBanned
+        ? '<button class="admin-act-btn admin-act-btn-green" data-id="' + id + '" data-status="0" onclick="adminSetStatusBtn(this)">🔓 Mở khóa</button>'
+        : '<button class="admin-act-btn admin-act-btn-red"   data-id="' + id + '" data-status="1" onclick="adminSetStatusBtn(this)">🔒 Khóa</button>';
+      actionHtml = '<div style="display:flex;gap:6px">' + roleBtn + statusBtn + '</div>';
+    }
+
+    var rowHtml = '<tr>' +
+      '<td style="color:#aaa;font-size:0.75rem">' + ((ADMIN_USER_PAGE - 1) * ADMIN_USER_PER + i + 1) + '</td>' +
+      '<td><div style="font-weight:700;font-size:0.82rem">' + name + '</div></td>' +
+      '<td style="font-size:0.78rem;color:#555">' + email + '</td>' +
+      '<td style="font-size:0.78rem;color:#555">' + phone + '</td>' +
+      '<td>' + roleBadge + '</td>' +
+      '<td>' + statusBadge + '</td>';
+
+    if (!isEmployeeView) {
+      rowHtml += '<td>' + actionHtml + '</td>';
+    }
+
+    rowHtml += '</tr>';
+    return rowHtml;
+  }).join('');
+}
+
+function renderUsersPagination(total, footer) {
+  var totalPages = Math.max(1, Math.ceil(total / ADMIN_USER_PER));
+  var from = total ? ((ADMIN_USER_PAGE - 1) * ADMIN_USER_PER + 1) : 0;
+  var to = total ? Math.min(ADMIN_USER_PAGE * ADMIN_USER_PER, total) : 0;
+  var pages = '';
+  for (var p = 1; p <= Math.min(totalPages, 5); p++) {
+    pages += '<button class="admin-page-btn' + (p === ADMIN_USER_PAGE ? ' active' : '') + '" onclick="adminGoUserPage(' + p + ')">' + p + '</button>';
+  }
+  footer.innerHTML =
+    '<span style="font-size:0.75rem;color:#aaa">Hiển thị ' + from + ' - ' + to + ' / ' + total + ' người dùng</span>' +
+    '<div class="admin-pagination">' +
+    '<button class="admin-page-btn text" onclick="adminGoUserPage(' + Math.max(1, ADMIN_USER_PAGE - 1) + ')">Trước</button>' +
+    pages +
+    '<button class="admin-page-btn text" onclick="adminGoUserPage(' + Math.min(totalPages, ADMIN_USER_PAGE + 1) + ')">Sau</button>' +
+    '</div>';
+}
+
+function adminGoUserPage(p) { ADMIN_USER_PAGE = p; renderUsersTable(); }
+
+function adminSearchUsers() {
+  ADMIN_USER_SEARCH = (document.getElementById('adminUserSearch')?.value || '').trim();
+  ADMIN_USER_ROLE = (document.getElementById('adminUserRoleFilter')?.value || '').trim();
+  ADMIN_USER_STATUS = (document.getElementById('adminUserStatusFilter')?.value || '').trim();
+  ADMIN_USER_PAGE = 1;
+  renderUsersTable();
+}
+
+function adminSetRoleBtn(btn) { adminSetRole(btn.dataset.id, parseInt(btn.dataset.role), btn); }
+function adminSetStatusBtn(btn) { adminSetStatus(btn.dataset.id, parseInt(btn.dataset.status), btn); }
+
+var ADMIN_GLOBAL_CONFIRM_RESOLVE = null;
+
+function adminEnsureGlobalConfirmModal() {
+  var modal = document.getElementById('adminGlobalConfirmModal');
+  if (modal) return modal;
+
+  modal = document.createElement('div');
+  modal.id = 'adminGlobalConfirmModal';
+  modal.style.cssText = 'position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:99999;background:rgba(0,0,0,.45);padding:16px;';
+  modal.innerHTML =
+    '<div style="width:min(420px,95vw);background:#fff;border-radius:14px;box-shadow:0 16px 40px rgba(0,0,0,.25);overflow:hidden">' +
+    '<div style="padding:16px 18px;border-bottom:1px solid #eee;font-size:1rem;font-weight:800;color:#1f2937" id="adminGlobalConfirmTitle">Xác nhận thao tác</div>' +
+    '<div style="padding:16px 18px;font-size:.92rem;color:#374151;line-height:1.55" id="adminGlobalConfirmText">Bạn có chắc muốn tiếp tục?</div>' +
+    '<div style="display:flex;justify-content:flex-end;gap:10px;padding:14px 18px;border-top:1px solid #eee">' +
+    '<button type="button" class="admin-act-btn" onclick="adminGlobalConfirmClose(false)">Hủy</button>' +
+    '<button type="button" class="admin-act-btn admin-act-btn-red" onclick="adminGlobalConfirmClose(true)">Xác nhận</button>' +
+    '</div>' +
+    '</div>';
+
+  modal.addEventListener('click', function (e) {
+    if (e.target === modal) adminGlobalConfirmClose(false);
+  });
+
+  document.body.appendChild(modal);
+  return modal;
+}
+
+function adminGlobalConfirmClose(accepted) {
+  var modal = document.getElementById('adminGlobalConfirmModal');
+  if (modal) modal.style.display = 'none';
+  if (ADMIN_GLOBAL_CONFIRM_RESOLVE) {
+    var resolve = ADMIN_GLOBAL_CONFIRM_RESOLVE;
+    ADMIN_GLOBAL_CONFIRM_RESOLVE = null;
+    resolve(!!accepted);
+  }
+}
+
+function adminOpenConfirmModal(message, title) {
+  var modal = adminEnsureGlobalConfirmModal();
+  var titleEl = document.getElementById('adminGlobalConfirmTitle');
+  var textEl = document.getElementById('adminGlobalConfirmText');
+
+  if (titleEl) titleEl.textContent = title || 'Xác nhận thao tác';
+  if (textEl) textEl.textContent = message || 'Bạn có chắc muốn tiếp tục?';
+  if (modal) modal.style.display = 'flex';
+
+  return new Promise(function (resolve) {
+    ADMIN_GLOBAL_CONFIRM_RESOLVE = resolve;
+  });
+}
+
+function adminPerformLogout() {
+  if (typeof apiLogoutLocal === 'function') {
+    apiLogoutLocal();
+  } else {
+    localStorage.removeItem('vt_access_token');
+    sessionStorage.removeItem('vt_access_token');
+    localStorage.removeItem('vt_user');
+    sessionStorage.removeItem('vt_user');
+  }
+  window.location.href = 'dang-nhap.html';
+}
+
+window.doLogout = async function () {
+  var accepted = await adminOpenConfirmModal('Bạn có chắc chắn muốn đăng xuất khỏi tài khoản này không?', 'Xác nhận đăng xuất');
+  if (!accepted) return;
+  adminPerformLogout();
+};
+
+// PATCH /api/users/:id/role
+async function adminSetRole(id, role, btn) {
+  var label = role === 2 ? 'Nhân viên' : 'Người dùng';
+  if (role !== 0 && role !== 2) {
+    showToast('⚠️ Chỉ được chuyển quyền giữa Người dùng và Nhân viên');
+    return;
+  }
+  var roleConfirmed = await adminOpenConfirmModal('Đổi quyền tài khoản này thành ' + label + '?', 'Xác nhận đổi quyền');
+  if (!roleConfirmed) return;
+  btn.disabled = true; btn.textContent = '...';
+
+  try {
+    var res = await apiAdminSetUserRole(id, role);
+    if (res && res.ok) {
+      showToast('✅ Đã đổi quyền thành ' + label);
+    } else {
+      showToast('❌ ' + adminExtractUserRoleErrorMessage(res));
+    }
+  } catch (e) {
+    showToast('❌ Không thể kết nối server');
+  }
+
+  renderUsersTable();
+}
+
+// PATCH /api/users/:id/status
+async function adminSetStatus(id, status, btn) {
+  var label = status === 1 ? 'khóa' : 'mở khóa';
+  var statusConfirmed = await adminOpenConfirmModal('Bạn muốn ' + label + ' tài khoản này?', 'Xác nhận trạng thái');
+  if (!statusConfirmed) return;
+  btn.disabled = true; btn.textContent = '...';
+
+  try {
+    var res = await apiAdminSetUserStatus(id, status);
+    if (res && res.ok) {
+      showToast('✅ Đã ' + label + ' tài khoản');
+    }
+  } catch (e) { }
+
+  // Fallback: cập nhật localStorage
+  try {
+    var db2 = JSON.parse(localStorage.getItem('vt_userdb') || sessionStorage.getItem('vt_userdb') || '[]');
+    var u2 = db2.find(function (x) { return x.id == id || x._id == id || x.email == id; });
+    if (u2) {
+      u2.locked = (status === 1);
+      u2.status = status;
+      localStorage.setItem('vt_userdb', JSON.stringify(db2));
+      sessionStorage.setItem('vt_userdb', JSON.stringify(db2));
+      showToast('✅ Đã ' + label + ' tài khoản');
+    }
+  } catch (e) { }
+
+  renderUsersTable();
+}
+
+// ===== TOURS DATA =====
+var ADMIN_TOURS_KEY = 'vt_admin_tours';
+var DEFAULT_TOURS = [
+  { id: 1, name: 'Du Thuyền Hạ Long Sang Trọng', location: 'Vịnh Hạ Long, Quảng Ninh', price: '6.990.000đ', duration: '3', desc: 'Trải nghiệm du thuyền 5 sao trên vịnh Hạ Long huyền thoại.', active: true, schedules: [{ date: '2026-04-10', slots: 20 }, { date: '2026-04-24', slots: 15 }], days: [] },
+  { id: 2, name: 'Tour Phố Cổ Hội An & Ẩm Thực', location: 'Phố Cổ Hội An, Quảng Nam', price: '1.250.000đ', duration: '2', desc: 'Khám phá phố cổ Hội An về đêm và trải nghiệm ẩm thực địa phương.', active: true, schedules: [{ date: '2026-04-05', slots: 25 }], days: [] },
+  { id: 3, name: 'Trekking & Homestay Sapa', location: 'Sapa, Lào Cai', price: '2.800.000đ', duration: '3', desc: 'Trekking qua các bản làng và lưu trú homestay bản địa.', active: true, schedules: [{ date: '2026-04-15', slots: 12 }], days: [] },
+  { id: 4, name: 'Khám Phá Hà Nội Cổ Kính', location: 'Hà Nội', price: '850.000đ', duration: '1', desc: 'Tour city khám phá 36 phố phường và ẩm thực đường phố.', active: true, schedules: [], days: [] },
+  { id: 5, name: 'Đà Nẵng – Bà Nà Hills', location: 'Đà Nẵng', price: '1.900.000đ', duration: '2', desc: 'Cầu Vàng, Bà Nà Hills và bãi biển Mỹ Khê tuyệt đẹp.', active: true, schedules: [{ date: '2026-04-20', slots: 30 }], days: [] },
+  { id: 6, name: 'Tràng An – Tam Cốc Ninh Bình', location: 'Ninh Bình', price: '1.100.000đ', duration: '1', desc: 'Chèo thuyền qua hang động Tràng An di sản thế giới UNESCO.', active: false, schedules: [], days: [] },
+  { id: 7, name: 'Sông Nước Miền Tây', location: 'Cần Thơ', price: '1.650.000đ', duration: '2', desc: 'Khám phá chợ nổi Cái Răng và vườn trái cây đặc sản.', active: true, schedules: [{ date: '2026-04-08', slots: 18 }], days: [] },
+];
+
+function adminGetTours() {
+  try { var r = localStorage.getItem(ADMIN_TOURS_KEY); return r ? JSON.parse(r) : DEFAULT_TOURS; } catch (e) { return DEFAULT_TOURS; }
+}
+function adminSaveTours(tours) { localStorage.setItem(ADMIN_TOURS_KEY, JSON.stringify(tours)); }
+
+// ===== TOURS LIST =====
+var ADMIN_TOUR_PAGE = 1;
+var ADMIN_TOUR_PER = 10;
+var ADMIN_TOUR_API_CACHE = [];
+var ADMIN_TOUR_SEARCH_TIMER = null;
+var ADMIN_TOUR_FILTERS = {
+  status: ''
+};
+
+function adminTourHandleSearch() {
+  if (ADMIN_TOUR_SEARCH_TIMER) clearTimeout(ADMIN_TOUR_SEARCH_TIMER);
+  ADMIN_TOUR_SEARCH_TIMER = setTimeout(function () {
+    ADMIN_TOUR_PAGE = 1;
+    adminRenderTours();
+  }, 350);
+}
+
+function adminTourApplyFilters() {
+  var status = (document.getElementById('adminTourStatus')?.value || '').trim();
+  ADMIN_TOUR_FILTERS.status = status;
+
+  ADMIN_TOUR_PAGE = 1;
+  adminRenderTours();
+}
+
+function adminTourResetFilters() {
+  var statusEl = document.getElementById('adminTourStatus');
+  var searchEl = document.getElementById('adminTourSearch');
+
+  if (statusEl) statusEl.value = '';
+  if (searchEl) searchEl.value = '';
+
+  ADMIN_TOUR_FILTERS = {
+    status: ''
+  };
+
+  ADMIN_TOUR_PAGE = 1;
+  adminRenderTours();
+}
+
+function adminExtractToursFromResponse(res) {
+  if (!res || !res.ok) return [];
+  var data = res.data || {};
+  var result = data.result !== undefined ? data.result : data;
+
+  if (Array.isArray(result)) return result;
+  if (Array.isArray(result && result.tours)) return result.tours;
+  if (Array.isArray(result && result.items)) return result.items;
+  if (Array.isArray(data.tours)) return data.tours;
+  if (Array.isArray(data.items)) return data.items;
+  return [];
+}
+
+function adminExtractTourPagination(res, fallbackPage, fallbackLimit, fallbackTotal) {
+  var data = (res && res.data) ? res.data : {};
+  var result = data.result !== undefined ? data.result : data;
+  var pg = (result && result.pagination) ? result.pagination : (data.pagination || {});
+  var page = Number(pg.page);
+  var limit = Number(pg.limit);
+  var total = Number(pg.total);
+  var totalPages = Number(pg.total_pages || pg.totalPages);
+
+  if (!isFinite(page) || page < 1) page = fallbackPage;
+  if (!isFinite(limit) || limit < 1) limit = fallbackLimit;
+  if (!isFinite(total) || total < 0) total = fallbackTotal;
+  if (!isFinite(totalPages) || totalPages < 1) totalPages = Math.max(1, Math.ceil(total / limit));
+
+  return {
+    page: page,
+    limit: limit,
+    total: total,
+    totalPages: totalPages
+  };
+}
+
+async function adminLoadToursFromApi(page, limit, keyword) {
+  try {
+    var params = {
+      page: page,
+      limit: limit
+    };
+    if (keyword) params.keyword = keyword;
+    if (ADMIN_TOUR_FILTERS.status !== '') params.status = Number(ADMIN_TOUR_FILTERS.status);
+
+    var res = await apiAdminGetTours(params);
+    var tours = adminExtractToursFromResponse(res);
+    if (res && res.ok) {
+      ADMIN_TOUR_API_CACHE = Array.isArray(tours) ? tours : [];
+      adminSaveTours(ADMIN_TOUR_API_CACHE);
+      return {
+        tours: ADMIN_TOUR_API_CACHE,
+        pagination: adminExtractTourPagination(res, page, limit, ADMIN_TOUR_API_CACHE.length)
+      };
+    }
+  } catch (e) { }
+
+  var fallback = adminGetTours();
+  var list = Array.isArray(fallback) ? fallback : [];
+  ADMIN_TOUR_API_CACHE = list.slice((page - 1) * limit, (page - 1) * limit + limit);
+  return {
+    tours: ADMIN_TOUR_API_CACHE,
+    pagination: {
+      page: page,
+      limit: limit,
+      total: list.length,
+      totalPages: Math.max(1, Math.ceil(list.length / limit))
+    }
+  };
+}
+
+function adminTourFormatCurrency(v) {
+  var n = Number(v);
+  if (!isFinite(n) || n <= 0) return '—';
+  return Math.round(n).toLocaleString('vi-VN') + 'đ';
+}
+
+function adminTourGetStatusMeta(status) {
+  var n = Number(status);
+  if (n === 0) return { label: 'Không hoạt động', cls: 'is-inactive' };
+  if (n === 1) return { label: 'Hoạt động', cls: 'is-active' };
+  if (n === 2) return { label: 'Đã hủy', cls: 'is-cancelled' };
+  return { label: 'Ẩn', cls: 'is-hidden' };
+}
+
+function adminTourStatusDropdownOptions(selected) {
+  var n = Number(selected);
+  var list = [
+    { value: 1, label: '✅ Hoạt động' },
+    { value: 0, label: '⭕ Không hoạt động' },
+    { value: 2, label: '🔴 Hủy' }
+  ];
+  return list.map(function (it) {
+    return '<option value="' + it.value + '"' + (it.value === n ? ' selected' : '') + '>' + it.label + '</option>';
+  }).join('');
+}
+
+function adminTourHandleStatusChange(selectEl) {
+  if (!selectEl) return;
+  var current = Number(selectEl.getAttribute('data-current') || 0);
+  var selected = Number(selectEl.value || 0);
+  var tr = selectEl.closest('tr');
+  var saveBtn = tr ? tr.querySelector('.admin-tour-save-status-btn') : null;
+  if (saveBtn) saveBtn.style.display = current === selected ? 'none' : 'inline-flex';
+}
+
+async function adminTourSaveStatus(btn) {
+  if (!btn) return;
+  var tr = btn.closest('tr');
+  if (!tr) return;
+
+  var selectEl = tr.querySelector('.admin-tour-status-dropdown');
+  if (!selectEl) return;
+
+  var tourId = String(selectEl.getAttribute('data-id') || '').trim();
+  var current = Number(selectEl.getAttribute('data-current') || 0);
+  var next = Number(selectEl.value || 0);
+
+  if (!tourId) {
+    showToast('❌ Không tìm thấy id tour');
+    return;
+  }
+  if (current === next) {
+    btn.style.display = 'none';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Đang lưu...';
+  try {
+    var res = await apiAdminPatchTourStatus(tourId, next);
+    if (!res || !res.ok) {
+      showToast('❌ Không thể cập nhật trạng thái tour');
+      return;
+    }
+    selectEl.setAttribute('data-current', String(next));
+    btn.style.display = 'none';
+    showToast('✅ Đã cập nhật trạng thái tour');
+  } catch (e) {
+    showToast('❌ Không thể kết nối server');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Lưu';
+  }
+}
+
+async function adminRenderTours() {
+  var tbody = document.getElementById('adminToursBody');
+  var footer = document.getElementById('adminToursFooter');
+  if (!tbody) return;
+  var canDeleteTour = adminCanDeleteTours();
+
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#9ca3af;padding:24px;font-size:0.82rem">Đang tải danh sách tour...</td></tr>';
+  if (footer) footer.innerHTML = '';
+
+  var search = (document.getElementById('adminTourSearch')?.value || '').trim();
+  var escapeHtml = function (val) {
+    return String(val || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  };
+  var payload = await adminLoadToursFromApi(ADMIN_TOUR_PAGE, ADMIN_TOUR_PER, search);
+  var paged = payload.tours || [];
+  var pg = payload.pagination || { page: ADMIN_TOUR_PAGE, limit: ADMIN_TOUR_PER, total: paged.length, totalPages: 1 };
+  var total = Number(pg.total) || 0;
+  var totalPages = Math.max(1, Number(pg.totalPages) || 1);
+  var currentPage = Math.max(1, Number(pg.page) || ADMIN_TOUR_PAGE);
+  var pageLimit = Math.max(1, Number(pg.limit) || ADMIN_TOUR_PER);
+  ADMIN_TOUR_PAGE = currentPage;
+
+  if (!paged.length) {
+    if (ADMIN_TOUR_PAGE > 1) {
+      ADMIN_TOUR_PAGE = 1;
+      return adminRenderTours();
+    }
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#9ca3af;padding:40px;font-size:0.85rem">Chưa có tour nào</td></tr>';
+    if (footer) footer.innerHTML = '';
+    return;
+  }
+
+  tbody.innerHTML = paged.map(function (t) {
+    var realIdx = paged.indexOf(t);
+    var nameText = t.name || '—';
+    var destinationText = t.destination || t.location || '—';
+    var departureText = t.departure_city || '—';
+    var minPriceText = adminTourFormatCurrency(t.min_price || t.price);
+
+    var images = Array.isArray(t.images) ? t.images : [];
+    var thumb = images.length ? images[0] : '';
+
+    var days = Number(t.duration_days || t.duration || 0);
+    var nights = (t.duration_nights !== undefined && t.duration_nights !== null) ? Number(t.duration_nights) : NaN;
+    var durationText = (isFinite(days) && days > 0)
+      ? (days + 'N' + (isFinite(nights) && nights >= 0 ? (nights + 'Đ') : ''))
+      : '—';
+
+    var statusVal = Number(t.status || 0);
+    var imageHtml = thumb
+      ? '<img class="admin-tour-thumb" src="' + escapeHtml(thumb) + '" alt="' + escapeHtml(nameText) + '">'
+      : '<div class="admin-tour-thumb-fallback">No img</div>';
+    var actionBtns = '<button class="admin-act-btn admin-tour-save-status-btn" style="display:none" onclick="adminTourSaveStatus(this)">Lưu</button>' +
+      '<button class="admin-act-btn" onclick="adminOpenEditTourModalByIdx(' + realIdx + ')">Sửa</button>' +
+      (canDeleteTour
+        ? '<button class="admin-act-btn admin-act-btn-red" data-id="' + (t._id || t.id || '') + '" data-idx="' + realIdx + '" onclick="adminDeleteTour(this)">Xóa</button>'
+        : '');
+    var statusDropdown = '<select class="admin-tour-status-dropdown" data-id="' + (t._id || t.id || '') + '" data-current="' + statusVal + '" onchange="adminTourHandleStatusChange(this)">' +
+      adminTourStatusDropdownOptions(statusVal) +
+      '</select>';
+
+    return '<tr>' +
+      '<td>' + imageHtml + '</td>' +
+      '<td style="max-width:280px"><div class="admin-tour-name">' + escapeHtml(nameText) + '</div><div class="admin-tour-destination">' + escapeHtml(destinationText) + '</div></td>' +
+      '<td style="white-space:nowrap;font-weight:700;color:#1f2937">' + escapeHtml(durationText) + '</td>' +
+      '<td style="white-space:nowrap;color:#374151">' + escapeHtml(departureText) + '</td>' +
+      '<td style="white-space:nowrap;font-weight:700;color:#111827">' + escapeHtml(minPriceText) + '</td>' +
+      '<td>' + statusDropdown + '</td>' +
+      '<td><div class="act-btns">' + actionBtns + '</div></td>' +
+      '</tr>';
+  }).join('');
+
+  var pageLinks = '';
+  for (var p = 1; p <= totalPages; p++) {
+    pageLinks += '<button class="admin-page-btn' + (p === ADMIN_TOUR_PAGE ? ' active' : '') + '" onclick="adminGoTourPage(' + p + ')">' + p + '</button>';
+  }
+  if (footer) footer.innerHTML =
+    '<span>Hiển thị ' + (((currentPage - 1) * pageLimit) + 1) + ' - ' + Math.min(currentPage * pageLimit, total) + ' của ' + total + ' tour</span>' +
+    '<div class="admin-pagination">' +
+    '<button class="admin-page-btn text" onclick="adminGoTourPage(' + Math.max(1, currentPage - 1) + ')">Trước</button>' +
+    pageLinks +
+    '<button class="admin-page-btn text" onclick="adminGoTourPage(' + Math.min(totalPages, currentPage + 1) + ')">Sau</button>' +
+    '</div>';
+}
+
+function adminGoTourPage(p) { ADMIN_TOUR_PAGE = p; adminRenderTours(); }
+
+function adminToggleTour(idx) {
+  var tours = adminGetTours();
+  if (!tours[idx]) return;
+  if (typeof tours[idx].status === 'number') {
+    tours[idx].status = tours[idx].status === 1 ? 0 : 1;
+    tours[idx].active = tours[idx].status === 1;
+  } else {
+    tours[idx].active = !tours[idx].active;
+    tours[idx].status = tours[idx].active ? 1 : 0;
+  }
+  adminSaveTours(tours);
+  adminRenderTours();
+  showToast(((tours[idx].status === 1 || tours[idx].active) ? '✅ Đã bật' : '⏸ Đã tắt') + ' tour: ' + tours[idx].name);
+}
+
+async function adminToggleTourVisibility(btn) {
+  var id = String(btn?.dataset?.id || '').trim();
+  if (!id) {
+    showToast('❌ Không tìm thấy id tour');
+    return;
+  }
+
+  var current = Number(btn?.dataset?.status || 0);
+  var next = current === 1 ? 0 : 1;
+
+  try {
+    var res = await apiAdminUpdateTourStatus(id, next);
+    if (!res || !res.ok) {
+      showToast('❌ Không thể cập nhật trạng thái hiển thị');
+      return;
+    }
+    showToast(next === 1 ? '✅ Đã bật hiển thị tour' : '⏸ Đã tắt hiển thị tour');
+    await adminRenderTours();
+  } catch (e) {
+    showToast('❌ Không thể kết nối server');
+  }
+}
+
+// ===== SHOW/HIDE VIEWS =====
+function adminShowTourList() {
+  document.getElementById('tourListView').style.display = 'block';
+  document.getElementById('tourCreateView').style.display = 'none';
+  adminRenderTours();
+}
+
+function adminShowCreateTour(idx) {
+  document.getElementById('tourListView').style.display = 'none';
+  document.getElementById('tourCreateView').style.display = 'block';
+  document.getElementById('atfMainTitle').textContent = idx !== undefined ? 'Chỉnh sửa Tour' : 'Tạo Tour Mới';
+  document.getElementById('atfMainSub').textContent = idx !== undefined ? 'Cập nhật thông tin tour' : 'Thêm một địa điểm mới vào nền tảng';
+  document.getElementById('atfName').dataset.idx = idx !== undefined ? idx : '';
+
+  if (idx !== undefined) {
+    var t = adminGetTours()[idx];
+    if (!t) return;
+    document.getElementById('atfName').value = t.name || '';
+    document.getElementById('atfLocation').value = t.location || '';
+    document.getElementById('atfPrice').value = t.price || '';
+    document.getElementById('atfDuration').value = t.duration || '';
+    document.getElementById('atfDesc').innerText = t.desc || '';
+    // Days
+    var dl = document.getElementById('atfDaysList');
+    dl.innerHTML = '';
+    (t.days || []).forEach(function (d) { atfAddDay(d.title, d.desc); });
+    if (!dl.children.length) { atfAddDay(); atfAddDay(); }
+    // Schedules
+    var sl = document.getElementById('atfScheduleList');
+    sl.innerHTML = '';
+    (t.schedules || []).forEach(function (s) { atfAddScheduleRow(s.date, s.slots); });
+  } else {
+    document.getElementById('atfName').value = '';
+    document.getElementById('atfLocation').value = '';
+    document.getElementById('atfPrice').value = '';
+    document.getElementById('atfDuration').value = '';
+    document.getElementById('atfDesc').innerText = 'Mô tả các điểm nổi bật của tour...';
+    document.getElementById('atfDaysList').innerHTML = '';
+    document.getElementById('atfScheduleList').innerHTML = '<p style="font-size:0.8rem;color:#bbb;text-align:center;padding:12px 0">Chưa có lịch nào</p>';
+    atfAddDay(); atfAddDay();
+  }
+}
+
+function adminEditTour(idx) { adminShowCreateTour(idx); }
+
+var ADMIN_TOUR_DETAIL_SCHEDULES = [];
+
+function adminTourDetailEscapeHtml(val) {
+  return String(val || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function adminTourDetailFormatDate(iso) {
+  if (!iso) return '—';
+  var d = new Date(iso);
+  if (isNaN(d.getTime())) return '—';
+  var dd = String(d.getDate()).padStart(2, '0');
+  var mm = String(d.getMonth() + 1).padStart(2, '0');
+  var yyyy = d.getFullYear();
+  return dd + '/' + mm + '/' + yyyy;
+}
+
+function adminTourDetailGetStatusLabel(status) {
+  var n = Number(status);
+  if (n === 0) return 'Không hoạt động';
+  if (n === 1) return 'Hoạt động';
+  if (n === 2) return 'Đã hủy';
+  return 'Không xác định';
+}
+
+function adminTourDetailEnsureModal() {
+  var modal = document.getElementById('adminTourDetailModal');
+  if (modal) return modal;
+
+  modal = document.createElement('div');
+  modal.id = 'adminTourDetailModal';
+  modal.className = 'admin-tour-detail-modal';
+  modal.innerHTML =
+    '<div class="admin-tour-detail-backdrop" onclick="adminTourDetailClose()"></div>' +
+    '<div class="admin-tour-detail-dialog">' +
+    '<div class="admin-tour-detail-head">' +
+    '<h3 id="adminTourDetailTitle">Chi tiết tour</h3>' +
+    '<button type="button" class="admin-btn-ghost" onclick="adminTourDetailClose()">✕ Đóng</button>' +
+    '</div>' +
+    '<div class="admin-tour-detail-body" id="adminTourDetailBody"></div>' +
+    '</div>';
+  document.body.appendChild(modal);
+  return modal;
+}
+
+function adminTourDetailClose() {
+  var modal = document.getElementById('adminTourDetailModal');
+  if (modal) modal.classList.remove('open');
+}
+
+function adminTourDetailExtract(res) {
+  var data = (res && res.data) ? res.data : {};
+  var result = data.result || {};
+  var root = result.tour || result || {};
+  var tour = root.tour || root;
+  var schedules = Array.isArray(root.schedules) ? root.schedules : (Array.isArray(result.schedules) ? result.schedules : []);
+  var minPrice = root.min_price;
+  return {
+    tour: tour && typeof tour === 'object' ? tour : {},
+    schedules: schedules,
+    minPrice: minPrice
+  };
+}
+
+function adminTourDetailRenderSchedule(index) {
+  var box = document.getElementById('adminTourScheduleDetail');
+  if (!box) return;
+  var sc = ADMIN_TOUR_DETAIL_SCHEDULES[index];
+  if (!sc) {
+    box.innerHTML = '<div class="admin-tour-detail-empty">Không có lịch khởi hành.</div>';
+    return;
+  }
+
+  var priceAdult = adminTourFormatCurrency(sc.price_adult);
+  var priceChild = adminTourFormatCurrency(sc.price_child);
+  var priceBaby = adminTourFormatCurrency(sc.price_baby);
+  var totalSlots = Number(sc.total_slots || 0);
+  var availSlots = Number(sc.available_slots || 0);
+  var statusLabel = adminTourDetailGetStatusLabel(sc.status);
+  var note = (sc.note || '').trim();
+
+  box.innerHTML =
+    '<div class="admin-tour-detail-grid">' +
+    '<div><span>Ngày đi</span><strong>' + adminTourDetailEscapeHtml(adminTourDetailFormatDate(sc.departure_date)) + '</strong></div>' +
+    '<div><span>Ngày về</span><strong>' + adminTourDetailEscapeHtml(adminTourDetailFormatDate(sc.return_date)) + '</strong></div>' +
+    '<div><span>Người lớn</span><strong>' + adminTourDetailEscapeHtml(priceAdult) + '</strong></div>' +
+    '<div><span>Trẻ em</span><strong>' + adminTourDetailEscapeHtml(priceChild) + '</strong></div>' +
+    '<div><span>Em bé</span><strong>' + adminTourDetailEscapeHtml(priceBaby) + '</strong></div>' +
+    '<div><span>Chỗ trống</span><strong>' + adminTourDetailEscapeHtml(String(availSlots)) + '/' + adminTourDetailEscapeHtml(String(totalSlots)) + '</strong></div>' +
+    '<div><span>Trạng thái</span><strong>' + adminTourDetailEscapeHtml(statusLabel) + '</strong></div>' +
+    '</div>' +
+    (note ? '<div class="admin-tour-detail-note">Ghi chú: ' + adminTourDetailEscapeHtml(note) + '</div>' : '');
+}
+
+function adminTourDetailBuildList(items) {
+  if (!Array.isArray(items) || !items.length) return '<div class="admin-tour-detail-empty">—</div>';
+  return '<ul class="admin-tour-detail-list">' + items.map(function (it) { return '<li>' + adminTourDetailEscapeHtml(it) + '</li>'; }).join('') + '</ul>';
+}
+
+function adminTourDetailRenderContent(payload) {
+  var modal = adminTourDetailEnsureModal();
+  var body = document.getElementById('adminTourDetailBody');
+  var title = document.getElementById('adminTourDetailTitle');
+  if (!modal || !body || !title) return;
+
+  var tour = payload.tour || {};
+  var schedules = Array.isArray(payload.schedules) ? payload.schedules : [];
+  ADMIN_TOUR_DETAIL_SCHEDULES = schedules;
+
+  var name = tour.name || 'Chi tiết tour';
+  var status = adminTourDetailGetStatusLabel(tour.status);
+  var images = Array.isArray(tour.images) ? tour.images : [];
+  var mainImage = images[0] || '';
+  var duration = (Number(tour.duration_days || 0) > 0)
+    ? (Number(tour.duration_days) + 'N' + Number(tour.duration_nights || 0) + 'Đ')
+    : '—';
+  var minPrice = adminTourFormatCurrency(payload.minPrice || tour.min_price);
+
+  var scheduleOptions = schedules.length
+    ? schedules.map(function (sc, i) {
+      var dep = adminTourDetailFormatDate(sc.departure_date);
+      var ret = adminTourDetailFormatDate(sc.return_date);
+      return '<option value="' + i + '">' + adminTourDetailEscapeHtml(dep) + ' → ' + adminTourDetailEscapeHtml(ret) + '</option>';
+    }).join('')
+    : '<option value="">Không có lịch</option>';
+
+  title.textContent = name;
+
+  body.innerHTML =
+    '<div class="admin-tour-detail-top">' +
+    (mainImage
+      ? '<img src="' + adminTourDetailEscapeHtml(mainImage) + '" class="admin-tour-detail-main-img" alt="' + adminTourDetailEscapeHtml(name) + '">'
+      : '<div class="admin-tour-detail-main-img empty">No image</div>') +
+    '<div class="admin-tour-detail-meta">' +
+    '<div class="admin-tour-detail-row"><span>Slug</span><strong>' + adminTourDetailEscapeHtml(tour.slug || '—') + '</strong></div>' +
+    '<div class="admin-tour-detail-row"><span>Điểm đến</span><strong>' + adminTourDetailEscapeHtml(tour.destination || '—') + '</strong></div>' +
+    '<div class="admin-tour-detail-row"><span>Khởi hành</span><strong>' + adminTourDetailEscapeHtml(tour.departure_city || '—') + '</strong></div>' +
+    '<div class="admin-tour-detail-row"><span>Thời lượng</span><strong>' + adminTourDetailEscapeHtml(duration) + '</strong></div>' +
+    '<div class="admin-tour-detail-row"><span>Giá từ</span><strong>' + adminTourDetailEscapeHtml(minPrice) + '</strong></div>' +
+    '<div class="admin-tour-detail-row"><span>Trạng thái</span><strong>' + adminTourDetailEscapeHtml(status) + '</strong></div>' +
+    '</div>' +
+    '</div>' +
+    '<div class="admin-tour-detail-block"><h4>Mô tả</h4><p>' + adminTourDetailEscapeHtml(tour.description || '—') + '</p></div>' +
+    '<div class="admin-tour-detail-columns">' +
+    '<div class="admin-tour-detail-block"><h4>Điểm nổi bật</h4>' + adminTourDetailBuildList(tour.highlights) + '</div>' +
+    '<div class="admin-tour-detail-block"><h4>Bao gồm</h4>' + adminTourDetailBuildList(tour.includes) + '</div>' +
+    '<div class="admin-tour-detail-block"><h4>Không bao gồm</h4>' + adminTourDetailBuildList(tour.excludes) + '</div>' +
+    '</div>' +
+    '<div class="admin-tour-detail-block">' +
+    '<h4>Lịch khởi hành</h4>' +
+    '<select id="adminTourScheduleSelect" class="admin-tour-detail-select" onchange="adminTourDetailRenderSchedule(Number(this.value || 0))">' + scheduleOptions + '</select>' +
+    '<div id="adminTourScheduleDetail" style="margin-top:10px"></div>' +
+    '</div>';
+
+  modal.classList.add('open');
+  adminTourDetailRenderSchedule(0);
+}
+
+async function adminOpenTourDetailByIdx(idx) {
+  var tours = (Array.isArray(ADMIN_TOUR_API_CACHE) && ADMIN_TOUR_API_CACHE.length)
+    ? ADMIN_TOUR_API_CACHE
+    : adminGetTours();
+  var tour = tours[idx];
+  if (!tour) {
+    showToast('❌ Không tìm thấy tour');
+    return;
+  }
+
+  var slug = String(tour.slug || '').trim();
+  if (!slug) {
+    showToast('❌ Tour chưa có slug để lấy chi tiết');
+    return;
+  }
+
+  var modal = adminTourDetailEnsureModal();
+  var body = document.getElementById('adminTourDetailBody');
+  var title = document.getElementById('adminTourDetailTitle');
+  if (title) title.textContent = 'Đang tải...';
+  if (body) body.innerHTML = '<div class="admin-tour-detail-empty">Đang tải chi tiết tour...</div>';
+  if (modal) modal.classList.add('open');
+
+  try {
+    var res = await apiAdminGetTour(slug);
+    if (!res || !res.ok) {
+      showToast('❌ Không thể tải chi tiết tour');
+      if (body) body.innerHTML = '<div class="admin-tour-detail-empty">Không thể tải chi tiết tour.</div>';
+      return;
+    }
+
+    var payload = adminTourDetailExtract(res);
+    adminTourDetailRenderContent(payload);
+  } catch (e) {
+    showToast('❌ Không thể kết nối server');
+    if (body) body.innerHTML = '<div class="admin-tour-detail-empty">Không thể kết nối server.</div>';
+  }
+}
+
+async function adminOpenTourDetailBySlugPrompt() {
+  var slug = window.prompt('Nhập slug tour cần xem chi tiết:');
+  slug = String(slug || '').trim();
+  if (!slug) return;
+
+  var modal = adminTourDetailEnsureModal();
+  var body = document.getElementById('adminTourDetailBody');
+  var title = document.getElementById('adminTourDetailTitle');
+  if (title) title.textContent = 'Đang tải...';
+  if (body) body.innerHTML = '<div class="admin-tour-detail-empty">Đang tải chi tiết tour...</div>';
+  if (modal) modal.classList.add('open');
+
+  try {
+    var res = await apiAdminGetTour(slug);
+    if (!res || !res.ok) {
+      showToast('❌ Không thể tải chi tiết tour với slug: ' + slug);
+      if (body) body.innerHTML = '<div class="admin-tour-detail-empty">Không tìm thấy tour theo slug.</div>';
+      return;
+    }
+    var payload = adminTourDetailExtract(res);
+    adminTourDetailRenderContent(payload);
+  } catch (e) {
+    showToast('❌ Không thể kết nối server');
+    if (body) body.innerHTML = '<div class="admin-tour-detail-empty">Không thể kết nối server.</div>';
+  }
+}
+
+var ADMIN_CREATE_TOUR_IMAGES = [];
+var ADMIN_CREATE_TOUR_MODE = 'create';
+var ADMIN_EDIT_TOUR_ID = '';
+var ADMIN_EDIT_TOUR_STATUS = 0;
+var ADMIN_EDIT_TOUR_SLUG = '';
+var ADMIN_EDIT_TOUR_SCHEDULES = [];
+var ADMIN_EDIT_TOUR_MIN_PRICE = 0;
+
+function adminSetCreateTourModalMode(mode) {
+  ADMIN_CREATE_TOUR_MODE = mode === 'edit' ? 'edit' : 'create';
+
+  var title = document.getElementById('adminCreateTourModalTitle');
+  var metaWrap = document.getElementById('adminCreateTourHeaderMeta');
+  var editExtraSection = document.getElementById('adminEditExtraSection');
+  var submitBtn = document.getElementById('adminCreateTourSubmitBtn');
+  if (title) title.textContent = ADMIN_CREATE_TOUR_MODE === 'edit' ? 'Chỉnh sửa tour' : 'Tạo tour mới';
+  if (submitBtn) submitBtn.textContent = ADMIN_CREATE_TOUR_MODE === 'edit' ? 'Lưu thay đổi' : 'Tạo tour';
+  if (metaWrap) metaWrap.style.display = ADMIN_CREATE_TOUR_MODE === 'edit' ? 'flex' : 'none';
+  if (editExtraSection) editExtraSection.style.display = ADMIN_CREATE_TOUR_MODE === 'edit' ? 'block' : 'none';
+}
+
+function adminEditTourStatusMeta(status) {
+  var n = Number(status);
+  if (n === 1) return { label: 'Active', cls: 'is-active' };
+  if (n === 2) return { label: 'Cancelled', cls: 'is-cancelled' };
+  return { label: 'Inactive', cls: 'is-inactive' };
+}
+
+function adminEditScheduleStatusMeta(status) {
+  var n = Number(status);
+  switch (n) {
+    case 1:
+      return { text: 'Còn chỗ', color: 'green' };
+    case 2:
+      return { text: 'Đã đầy', color: 'orange' };
+    case 3:
+      return { text: 'Đã kết thúc', color: 'gray' };
+    case 0:
+      return { text: 'Đã hủy', color: 'red' };
+    default:
+      return { text: 'Không xác định', color: 'gray' };
+  }
+}
+
+function adminEditScheduleStatusSelectHtml(selectId, status, disabled) {
+  var current = Number(status);
+  var attrs = 'class="admin-schedule-status-select"';
+  if (selectId) attrs += ' id="' + adminTourDetailEscapeHtml(selectId) + '"';
+  if (disabled) attrs += ' disabled';
+
+  var options = [
+    { value: 1, text: 'Còn chỗ' },
+    { value: 2, text: 'Đã đầy' },
+    { value: 3, text: 'Đã kết thúc' },
+    { value: 0, text: 'Đã hủy' }
+  ];
+
+  var html = '<select ' + attrs + '>';
+  html += options.map(function (opt) {
+    var selected = Number(opt.value) === current ? ' selected' : '';
+    return '<option value="' + opt.value + '"' + selected + '>' + adminTourDetailEscapeHtml(opt.text) + '</option>';
+  }).join('');
+  if (![0, 1, 2, 3].includes(current)) {
+    html += '<option value="' + adminTourDetailEscapeHtml(String(current)) + '" selected>Không xác định</option>';
+  }
+  html += '</select>';
+  return html;
+}
+
+function adminScheduleParseTime(value) {
+  if (!value) return NaN;
+  var t = new Date(value).getTime();
+  return Number.isFinite(t) ? t : NaN;
+}
+
+function adminScheduleBookedCount(sc) {
+  var total = Number(sc && sc.total_slots || 0);
+  var available = Number(sc && sc.available_slots || 0);
+  return Math.max(0, total - available);
+}
+
+function adminScheduleCanUpdateFromBe(sc) {
+  if (!sc || typeof sc !== 'object') {
+    return { ok: false, message: 'Không tìm thấy dữ liệu lịch từ BE.' };
+  }
+
+  var status = Number(sc.status);
+  if (status === 3) {
+    return { ok: false, message: 'Lịch đã kết thúc (Expired), không được phép chỉnh sửa.' };
+  }
+  if (status === 0) {
+    return { ok: false, message: 'Lịch đã hủy (Cancelled), không được phép chỉnh sửa.' };
+  }
+  if (status !== 1 && status !== 2) {
+    return { ok: false, message: 'Trạng thái lịch không hợp lệ để cập nhật.' };
+  }
+
+  var departureMs = adminScheduleParseTime(sc.departure_date);
+  if (!Number.isFinite(departureMs)) {
+    return { ok: false, message: 'Ngày khởi hành từ BE không hợp lệ.' };
+  }
+  if (departureMs <= Date.now()) {
+    return { ok: false, message: 'Ngày khởi hành đã qua, không được phép chỉnh sửa.' };
+  }
+
+  return { ok: true };
+}
+
+function adminScheduleValidateDateInput(dep, ret) {
+  var depMs = adminScheduleParseTime(dep);
+  var retMs = adminScheduleParseTime(ret);
+
+  if (!Number.isFinite(depMs) || !Number.isFinite(retMs)) {
+    return { ok: false, message: 'Ngày đi hoặc ngày về không hợp lệ.' };
+  }
+  if (depMs >= retMs) {
+    return { ok: false, message: 'Ngày đi phải nhỏ hơn ngày về.' };
+  }
+  if (depMs <= Date.now()) {
+    return { ok: false, message: 'Không được sửa lịch về quá khứ (ngày đi phải lớn hơn hiện tại).' };
+  }
+
+  return { ok: true };
+}
+
+function adminScheduleValidateTotalSlots(totalSlots, sourceSc) {
+  if (!sourceSc || typeof sourceSc !== 'object') {
+    return { ok: false, message: 'Không thể kiểm tra số chỗ đã đặt từ dữ liệu hiện tại.' };
+  }
+
+  var booked = adminScheduleBookedCount(sourceSc);
+  var total = Number(totalSlots);
+  if (!Number.isFinite(total) || total <= 0) {
+    return { ok: false, message: 'Tổng chỗ phải lớn hơn 0.' };
+  }
+  if (total < booked) {
+    return { ok: false, message: 'Tổng chỗ không được nhỏ hơn số đã đặt (' + booked + ').' };
+  }
+
+  return { ok: true, booked: booked };
+}
+
+function adminEditTourFormatDateTime(value) {
+  if (!value) return '—';
+  var d = new Date(value);
+  if (isNaN(d.getTime())) return '—';
+  var dd = String(d.getDate()).padStart(2, '0');
+  var mm = String(d.getMonth() + 1).padStart(2, '0');
+  var yyyy = d.getFullYear();
+  var hh = String(d.getHours()).padStart(2, '0');
+  var min = String(d.getMinutes()).padStart(2, '0');
+  return dd + '/' + mm + '/' + yyyy + ' ' + hh + ':' + min;
+}
+
+function adminEditTourUpdateHeaderMeta(meta) {
+  var statusEl = document.getElementById('adminEditTourStatusBadge');
+  var createdEl = document.getElementById('adminEditTourCreatedAt');
+  var updatedEl = document.getElementById('adminEditTourUpdatedAt');
+
+  if (statusEl) {
+    var sm = adminEditTourStatusMeta(meta && meta.status);
+    statusEl.className = 'admin-tour-status ' + sm.cls;
+    statusEl.textContent = sm.label;
+  }
+  if (createdEl) createdEl.textContent = adminEditTourFormatDateTime(meta && meta.createdAt);
+  if (updatedEl) updatedEl.textContent = adminEditTourFormatDateTime(meta && meta.updatedAt);
+}
+
+function adminEditTourRenderSchedulesTable() {
+  var body = document.getElementById('adminEditSchedulesBody');
+  if (!body) return;
+  var canDeleteSchedule = adminCanDeleteTours();
+
+  if (!Array.isArray(ADMIN_EDIT_TOUR_SCHEDULES) || !ADMIN_EDIT_TOUR_SCHEDULES.length) {
+    body.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#9ca3af;padding:14px">Chưa có lịch khởi hành</td></tr>';
+    return;
+  }
+
+  body.innerHTML = ADMIN_EDIT_TOUR_SCHEDULES.map(function (s, idx) {
+    var dep = adminTourDetailFormatDate(s.departure_date);
+    var ret = adminTourDetailFormatDate(s.return_date);
+    var pa = adminTourFormatCurrency(s.price_adult);
+    var pc = adminTourFormatCurrency(s.price_child);
+    var pb = adminTourFormatCurrency(s.price_baby);
+    var note = String(s.note || '').trim();
+    var total = Number(s.total_slots || 0);
+    var avail = Number(s.available_slots || 0);
+    var statusSelect = adminEditScheduleStatusSelectHtml('', s.status, true);
+    var updateRule = adminScheduleCanUpdateFromBe(s);
+    var editBtn = updateRule.ok
+      ? '<button type="button" class="admin-act-btn" onclick="adminEditTourSchedulePromptEdit(' + idx + ')">Sửa</button>'
+      : '<button type="button" class="admin-act-btn" disabled title="' + adminTourDetailEscapeHtml(updateRule.message) + '">Sửa</button>';
+    var scheduleActions = editBtn +
+      (canDeleteSchedule
+        ? '<button type="button" class="admin-act-btn admin-act-btn-red" onclick="adminEditTourScheduleDelete(' + idx + ')">Xóa</button>'
+        : '');
+
+    return '<tr>' +
+      '<td>' + adminTourDetailEscapeHtml(dep) + '</td>' +
+      '<td>' + adminTourDetailEscapeHtml(ret) + '</td>' +
+      '<td>' + adminTourDetailEscapeHtml(pa) + '</td>' +
+      '<td>' + adminTourDetailEscapeHtml(pc) + '</td>' +
+      '<td>' + adminTourDetailEscapeHtml(pb) + '</td>' +
+      '<td>' + adminTourDetailEscapeHtml(note || '—') + '</td>' +
+      '<td>' + adminTourDetailEscapeHtml(String(total)) + '</td>' +
+      '<td>' + adminTourDetailEscapeHtml(String(avail)) + '</td>' +
+      '<td>' + statusSelect + '</td>' +
+      '<td><div class="act-btns">' + scheduleActions + '</div></td>' +
+      '</tr>';
+  }).join('');
+}
+
+async function adminEditTourScheduleRefresh() {
+  if (!ADMIN_EDIT_TOUR_SLUG) return;
+  try {
+    var res = await apiAdminGetTour(ADMIN_EDIT_TOUR_SLUG);
+    if (!res || !res.ok) return;
+    var payload = adminTourDetailExtract(res);
+    var tour = payload.tour || {};
+    ADMIN_EDIT_TOUR_SCHEDULES = Array.isArray(payload.schedules) ? payload.schedules : [];
+    ADMIN_EDIT_TOUR_STATUS = Number(tour.status || 0);
+    ADMIN_EDIT_TOUR_MIN_PRICE = Number(payload.minPrice || tour.min_price || 0) || 0;
+    adminEditTourUpdateHeaderMeta({
+      status: ADMIN_EDIT_TOUR_STATUS,
+      createdAt: tour.created_at || tour.createdAt,
+      updatedAt: tour.updated_at || tour.updatedAt,
+      minPrice: ADMIN_EDIT_TOUR_MIN_PRICE
+    });
+    adminEditTourRenderSchedulesTable();
+  } catch (e) { }
+}
+
+async function adminEditTourScheduleAdd() {
+  if (!ADMIN_EDIT_TOUR_ID) return;
+
+  var body = document.getElementById('adminEditSchedulesBody');
+  if (!body) return;
+
+  var editingRow = document.getElementById('adminEditScheduleEditRow');
+  if (editingRow) {
+    showToast('⚠️ Bạn đang sửa một lịch, vui lòng lưu hoặc hủy trước.');
+    return;
+  }
+
+  var exists = document.getElementById('adminEditScheduleCreateRow');
+  if (exists) {
+    var focusEl = document.getElementById('newScDepartureDate');
+    if (focusEl) focusEl.focus();
+    return;
+  }
+
+  if (!Array.isArray(ADMIN_EDIT_TOUR_SCHEDULES) || !ADMIN_EDIT_TOUR_SCHEDULES.length) {
+    body.innerHTML = '';
+  }
+
+  var row = document.createElement('tr');
+  row.id = 'adminEditScheduleCreateRow';
+  row.innerHTML =
+    '<td><input id="newScDepartureDate" type="date" class="admin-create-tour-line-input"></td>' +
+    '<td><input id="newScReturnDate" type="date" class="admin-create-tour-line-input"></td>' +
+    '<td><input id="newScPriceAdult" type="number" min="0" class="admin-create-tour-line-input" placeholder="0"></td>' +
+    '<td><input id="newScPriceChild" type="number" min="0" class="admin-create-tour-line-input" placeholder="0"></td>' +
+    '<td><input id="newScPriceBaby" type="number" min="0" class="admin-create-tour-line-input" placeholder="0"></td>' +
+    '<td><input id="newScNote" type="text" class="admin-create-tour-line-input" placeholder="Ghi chú"></td>' +
+    '<td><input id="newScTotalSlots" type="number" min="1" class="admin-create-tour-line-input" placeholder="10"></td>' +
+    '<td style="color:#6b7280;font-size:0.78rem">Tự động</td>' +
+    '<td>' + adminEditScheduleStatusSelectHtml('newScStatus', 1, false) + '</td>' +
+    '<td><div class="act-btns"><button type="button" class="admin-act-btn" onclick="adminEditTourScheduleSaveNewRow()">✅ Lưu</button><button type="button" class="admin-act-btn admin-act-btn-red" onclick="adminEditTourScheduleCancelNewRow()">❌ Hủy</button></div></td>';
+
+  body.appendChild(row);
+  var firstInput = document.getElementById('newScDepartureDate');
+  if (firstInput) firstInput.focus();
+}
+
+function adminEditTourScheduleCancelNewRow() {
+  var row = document.getElementById('adminEditScheduleCreateRow');
+  if (!row) return;
+  row.remove();
+  if (!Array.isArray(ADMIN_EDIT_TOUR_SCHEDULES) || !ADMIN_EDIT_TOUR_SCHEDULES.length) {
+    adminEditTourRenderSchedulesTable();
+  }
+}
+
+async function adminEditTourScheduleSaveNewRow() {
+  if (!ADMIN_EDIT_TOUR_ID) return;
+
+  var dep = String(document.getElementById('newScDepartureDate')?.value || '').trim();
+  var ret = String(document.getElementById('newScReturnDate')?.value || '').trim();
+  var pa = Number(document.getElementById('newScPriceAdult')?.value || 0);
+  var pc = Number(document.getElementById('newScPriceChild')?.value || 0);
+  var pb = Number(document.getElementById('newScPriceBaby')?.value || 0);
+  var note = String(document.getElementById('newScNote')?.value || '').trim();
+  var total = Number(document.getElementById('newScTotalSlots')?.value || 0);
+  var status = Number(document.getElementById('newScStatus')?.value || 1);
+
+  if (!dep || !ret) {
+    showToast('⚠️ Vui lòng nhập ngày đi và ngày về');
+    return;
+  }
+  if (!isFinite(total) || total <= 0) {
+    showToast('⚠️ Tổng chỗ phải lớn hơn 0');
+    return;
+  }
+
+  var dateRule = adminScheduleValidateDateInput(dep, ret);
+  if (!dateRule.ok) {
+    showToast('⚠️ ' + dateRule.message);
+    return;
+  }
+
+  var payload = {
+    departure_date: dep,
+    return_date: ret,
+    price_adult: Math.max(0, pa),
+    price_child: Math.max(0, pc),
+    price_baby: Math.max(0, pb),
+    note: note,
+    total_slots: total,
+    available_slots: total,
+    status: status
+  };
+
+  try {
+    var res = await apiAdminCreateSchedule(ADMIN_EDIT_TOUR_ID, payload);
+    if (!res || !res.ok) {
+      showToast('❌ Không thể thêm lịch');
+      return;
+    }
+    showToast('✅ Đã thêm lịch khởi hành');
+    await adminEditTourScheduleRefresh();
+  } catch (e) {
+    showToast('❌ Không thể kết nối server');
+  }
+}
+
+async function adminEditTourSchedulePromptEdit(idx) {
+  var sc = Array.isArray(ADMIN_EDIT_TOUR_SCHEDULES) ? ADMIN_EDIT_TOUR_SCHEDULES[idx] : null;
+  if (!sc) return;
+
+  var updateRule = adminScheduleCanUpdateFromBe(sc);
+  if (!updateRule.ok) {
+    showToast('❌ ' + updateRule.message);
+    return;
+  }
+
+  var sid = String(sc._id || sc.id || '').trim();
+  if (!sid) {
+    showToast('❌ Không tìm thấy id lịch');
+    return;
+  }
+
+  var createRow = document.getElementById('adminEditScheduleCreateRow');
+  if (createRow) {
+    showToast('⚠️ Bạn đang thêm lịch mới, vui lòng lưu hoặc hủy trước.');
+    return;
+  }
+
+  var body = document.getElementById('adminEditSchedulesBody');
+  if (!body) return;
+
+  var oldEditRow = document.getElementById('adminEditScheduleEditRow');
+  if (oldEditRow) oldEditRow.remove();
+
+  var row = document.createElement('tr');
+  row.id = 'adminEditScheduleEditRow';
+  row.setAttribute('data-schedule-id', sid);
+
+  row.innerHTML =
+    '<td><input id="editScDepartureDate" type="date" class="admin-create-tour-line-input" value="' + adminTourDetailEscapeHtml(String(sc.departure_date || '').slice(0, 10)) + '"></td>' +
+    '<td><input id="editScReturnDate" type="date" class="admin-create-tour-line-input" value="' + adminTourDetailEscapeHtml(String(sc.return_date || '').slice(0, 10)) + '"></td>' +
+    '<td><input id="editScPriceAdult" type="number" min="0" class="admin-create-tour-line-input" value="' + adminTourDetailEscapeHtml(String(sc.price_adult || 0)) + '"></td>' +
+    '<td><input id="editScPriceChild" type="number" min="0" class="admin-create-tour-line-input" value="' + adminTourDetailEscapeHtml(String(sc.price_child || 0)) + '"></td>' +
+    '<td><input id="editScPriceBaby" type="number" min="0" class="admin-create-tour-line-input" value="' + adminTourDetailEscapeHtml(String(sc.price_baby || 0)) + '"></td>' +
+    '<td><input id="editScNote" type="text" class="admin-create-tour-line-input" value="' + adminTourDetailEscapeHtml(String(sc.note || '')) + '"></td>' +
+    '<td><input id="editScTotalSlots" type="number" min="1" class="admin-create-tour-line-input" value="' + adminTourDetailEscapeHtml(String(sc.total_slots || 0)) + '"></td>' +
+    '<td><input id="editScAvailableSlots" type="number" min="0" class="admin-create-tour-line-input" value="' + adminTourDetailEscapeHtml(String(sc.available_slots || 0)) + '"></td>' +
+    '<td>' + adminEditScheduleStatusSelectHtml('editScStatus', sc.status, false) + '</td>' +
+    '<td><div class="act-btns"><button type="button" class="admin-act-btn" onclick="adminEditTourScheduleSaveEditRow()">✅ Lưu</button><button type="button" class="admin-act-btn admin-act-btn-red" onclick="adminEditTourScheduleCancelEditRow()">❌ Hủy</button></div></td>';
+
+  body.appendChild(row);
+  var firstInput = document.getElementById('editScDepartureDate');
+  if (firstInput) firstInput.focus();
+}
+
+function adminEditTourScheduleCancelEditRow() {
+  var row = document.getElementById('adminEditScheduleEditRow');
+  if (row) row.remove();
+}
+
+var ADMIN_EDIT_SCHEDULE_CONFIRM_RESOLVE = null;
+
+function adminEditScheduleConfirmEnsureModal() {
+  var modal = document.getElementById('adminEditScheduleConfirmModal');
+  if (modal) return modal;
+
+  modal = document.createElement('div');
+  modal.id = 'adminEditScheduleConfirmModal';
+  modal.style.display = 'none';
+  modal.style.position = 'fixed';
+  modal.style.inset = '0';
+  modal.style.background = 'rgba(8,12,20,.45)';
+  modal.style.zIndex = '1750';
+  modal.style.alignItems = 'center';
+  modal.style.justifyContent = 'center';
+  modal.style.padding = '20px';
+  modal.onclick = function (e) {
+    if (e.target === modal) adminEditScheduleConfirmClose(false);
+  };
+
+  modal.innerHTML =
+    '<div class="admin-section" style="width:min(460px,100%);margin:0">' +
+    '<div class="admin-section-head" style="margin-bottom:8px">' +
+    '<div class="admin-section-title">Xác nhận xóa lịch</div>' +
+    '</div>' +
+    '<p id="adminEditScheduleConfirmText" style="font-size:0.86rem;color:#4b5563;line-height:1.5;margin:8px 0 16px">Bạn có chắc muốn xóa lịch này?</p>' +
+    '<div style="display:flex;justify-content:flex-end;gap:10px">' +
+    '<button class="admin-btn-ghost" type="button" onclick="adminEditScheduleConfirmClose(false)">Hủy</button>' +
+    '<button class="admin-btn-primary" type="button" onclick="adminEditScheduleConfirmClose(true)">Xóa</button>' +
+    '</div>' +
+    '</div>';
+
+  document.body.appendChild(modal);
+  return modal;
+}
+
+function adminEditScheduleConfirmClose(ok) {
+  var modal = document.getElementById('adminEditScheduleConfirmModal');
+  if (modal) modal.style.display = 'none';
+  if (typeof ADMIN_EDIT_SCHEDULE_CONFIRM_RESOLVE === 'function') {
+    ADMIN_EDIT_SCHEDULE_CONFIRM_RESOLVE(!!ok);
+    ADMIN_EDIT_SCHEDULE_CONFIRM_RESOLVE = null;
+  }
+}
+
+function adminEditScheduleConfirm(message) {
+  var modal = adminEditScheduleConfirmEnsureModal();
+  var text = document.getElementById('adminEditScheduleConfirmText');
+  if (text) text.textContent = message || 'Bạn có chắc muốn xóa lịch này?';
+  if (modal) modal.style.display = 'flex';
+  return new Promise(function (resolve) {
+    ADMIN_EDIT_SCHEDULE_CONFIRM_RESOLVE = resolve;
+  });
+}
+
+async function adminEditTourScheduleSaveEditRow() {
+  var row = document.getElementById('adminEditScheduleEditRow');
+  if (!row) return;
+
+  var sid = String(row.getAttribute('data-schedule-id') || '').trim();
+  if (!sid) {
+    showToast('❌ Không tìm thấy id lịch');
+    return;
+  }
+
+  var status = Number(document.getElementById('editScStatus')?.value || 0);
+  var dep = String(document.getElementById('editScDepartureDate')?.value || '').trim();
+  var ret = String(document.getElementById('editScReturnDate')?.value || '').trim();
+  var pa = Number(document.getElementById('editScPriceAdult')?.value || 0);
+  var pc = Number(document.getElementById('editScPriceChild')?.value || 0);
+  var pb = Number(document.getElementById('editScPriceBaby')?.value || 0);
+  var note = String(document.getElementById('editScNote')?.value || '').trim();
+  var total = Number(document.getElementById('editScTotalSlots')?.value || 0);
+  var avail = Number(document.getElementById('editScAvailableSlots')?.value || 0);
+
+  if (!dep || !ret) {
+    showToast('⚠️ Vui lòng nhập ngày đi và ngày về');
+    return;
+  }
+  if (!isFinite(total) || total <= 0) {
+    showToast('⚠️ Tổng chỗ phải lớn hơn 0');
+    return;
+  }
+
+  var sourceSchedule = (Array.isArray(ADMIN_EDIT_TOUR_SCHEDULES) ? ADMIN_EDIT_TOUR_SCHEDULES : [])
+    .find(function (it) { return String(it && (it._id || it.id) || '').trim() === sid; });
+
+  var canUpdateRule = adminScheduleCanUpdateFromBe(sourceSchedule);
+  if (!canUpdateRule.ok) {
+    showToast('❌ ' + canUpdateRule.message);
+    return;
+  }
+
+  var totalRule = adminScheduleValidateTotalSlots(total, sourceSchedule);
+  if (!totalRule.ok) {
+    showToast('⚠️ ' + totalRule.message);
+    return;
+  }
+
+  var dateRule = adminScheduleValidateDateInput(dep, ret);
+  if (!dateRule.ok) {
+    showToast('⚠️ ' + dateRule.message);
+    return;
+  }
+
+  var payload = {
+    departure_date: dep,
+    return_date: ret,
+    price_adult: Math.max(0, pa),
+    price_child: Math.max(0, pc),
+    price_baby: Math.max(0, pb),
+    note: note,
+    total_slots: Math.max(1, total),
+    available_slots: Math.max(0, Math.min(total, avail)),
+    status: status
+  };
+
+  try {
+    var res = await apiAdminUpdateSchedule(sid, payload);
+    if (!res || !res.ok) {
+      showToast('❌ Không thể cập nhật lịch');
+      return;
+    }
+    showToast('✅ Đã cập nhật lịch');
+    await adminEditTourScheduleRefresh();
+  } catch (e) {
+    showToast('❌ Không thể kết nối server');
+  }
+}
+
+async function adminEditTourScheduleDelete(idx) {
+  if (!adminCanDeleteTours()) {
+    showToast('❌ Nhân viên không có quyền xóa lịch khởi hành');
+    return;
+  }
+
+  var sc = Array.isArray(ADMIN_EDIT_TOUR_SCHEDULES) ? ADMIN_EDIT_TOUR_SCHEDULES[idx] : null;
+  if (!sc) return;
+  var sid = String(sc._id || sc.id || '').trim();
+  if (!sid) {
+    showToast('❌ Không tìm thấy id lịch');
+    return;
+  }
+  var ok = await adminEditScheduleConfirm('Bạn có chắc muốn xóa lịch khởi hành này?');
+  if (!ok) return;
+
+  try {
+    var res = await apiAdminDeleteSchedule(sid);
+    if (!res || !res.ok) {
+      showToast('❌ Không thể xóa lịch');
+      return;
+    }
+    showToast('✅ Đã xóa lịch');
+    await adminEditTourScheduleRefresh();
+  } catch (e) {
+    showToast('❌ Không thể kết nối server');
+  }
+}
+
+async function adminEditTourToggleVisibility() {
+  if (!ADMIN_EDIT_TOUR_ID) return;
+  var current = Number(ADMIN_EDIT_TOUR_STATUS || 0);
+  var next = current === 1 ? 0 : 1;
+
+  try {
+    var res = await apiAdminUpdateTourStatus(ADMIN_EDIT_TOUR_ID, next);
+    if (!res || !res.ok) {
+      showToast('❌ Không thể cập nhật trạng thái hiển thị');
+      return;
+    }
+    ADMIN_EDIT_TOUR_STATUS = next;
+    await adminEditTourScheduleRefresh();
+    showToast(next === 1 ? '✅ Đã bật hiển thị tour' : '⏸ Đã tắt hiển thị tour');
+    await adminRenderTours();
+  } catch (e) {
+    showToast('❌ Không thể kết nối server');
+  }
+}
+
+function adminCreateTourEnsureModal() {
+  var modal = document.getElementById('adminCreateTourModal');
+  if (modal) return modal;
+
+  modal = document.createElement('div');
+  modal.id = 'adminCreateTourModal';
+  modal.className = 'admin-create-tour-modal';
+  modal.innerHTML =
+    '<div class="admin-create-tour-backdrop" onclick="adminCloseCreateTourModal()"></div>' +
+    '<div class="admin-create-tour-dialog">' +
+    '<div class="admin-create-tour-head">' +
+    '<div style="display:flex;flex-direction:column;gap:8px">' +
+    '<h3 id="adminCreateTourModalTitle">Tạo tour mới</h3>' +
+    '<div id="adminCreateTourHeaderMeta" style="display:none;align-items:center;gap:14px;flex-wrap:wrap">' +
+    '<div style="display:flex;align-items:center;gap:6px"><span style="font-size:12px;color:#6b7280">Trạng thái:</span><span id="adminEditTourStatusBadge" class="admin-tour-status is-inactive">Inactive</span></div>' +
+    '<div style="font-size:12px;color:#6b7280">Ngày tạo: <strong id="adminEditTourCreatedAt" style="color:#374151">—</strong></div>' +
+    '<div style="font-size:12px;color:#6b7280">Ngày cập nhật: <strong id="adminEditTourUpdatedAt" style="color:#374151">—</strong></div>' +
+    '</div>' +
+    '</div>' +
+    '<button type="button" class="admin-btn-ghost" onclick="adminCloseCreateTourModal()">✕ Đóng</button>' +
+    '</div>' +
+    '<div class="admin-create-tour-body">' +
+    '<section class="admin-create-tour-section">' +
+    '<h4>Phần 1 - Thông tin cơ bản</h4>' +
+    '<div class="admin-create-tour-grid">' +
+    '<div class="afp-field"><label>Tên tour <span class="admin-required">*</span></label><input id="newTourName" type="text" placeholder="Nhập tên tour"></div>' +
+    '<div class="afp-field"><label>Danh mục <span class="admin-required">*</span></label><select id="newTourCategory"><option value="">Đang tải danh mục...</option></select></div>' +
+    '<div class="afp-field"><label>Điểm đến <span class="admin-required">*</span></label><input id="newTourDestination" type="text" placeholder="Ví dụ: Đà Lạt, Lâm Đồng"></div>' +
+    '<div class="afp-field"><label>Thành phố khởi hành <span class="admin-required">*</span></label><input id="newTourDepartureCity" type="text" placeholder="Ví dụ: Hồ Chí Minh"></div>' +
+    '<div class="afp-field"><label>Số ngày <span class="admin-required">*</span></label><input id="newTourDays" type="number" min="1" placeholder="4"></div>' +
+    '<div class="afp-field"><label>Số đêm <span class="admin-required">*</span></label><input id="newTourNights" type="number" min="0" placeholder="3"></div>' +
+    '<div class="afp-field admin-create-tour-full"><label>Mô tả</label><textarea id="newTourDescription" rows="3" placeholder="Mô tả tour..."></textarea></div>' +
+    '</div>' +
+    '</section>' +
+
+    '<section class="admin-create-tour-section">' +
+    '<h4>Phần 2 - Hình ảnh</h4>' +
+    '<p class="admin-create-tour-hint">Upload ảnh <span class="admin-required">*</span> (multipart, tối đa 10 ảnh)</p>' +
+    '<input id="newTourImages" type="file" accept="image/*" multiple onchange="adminCreateTourHandleImages(this)">' +
+    '<div id="newTourImagesPreview" class="admin-create-tour-images"></div>' +
+    '</section>' +
+
+    '<section class="admin-create-tour-section">' +
+    '<div class="admin-create-tour-row-head"><h4>Phần 3 - Điểm nổi bật</h4><button type="button" class="admin-btn-ghost" onclick="adminCreateTourAddHighlight()">+ Thêm điểm nổi bật</button></div>' +
+    '<div id="newTourHighlights" class="admin-create-tour-lines"></div>' +
+    '</section>' +
+
+    '<section class="admin-create-tour-section">' +
+    '<div class="admin-create-tour-row-head"><h4>Phần 4 - Hành trình</h4><button type="button" class="admin-btn-ghost" onclick="adminCreateTourAddItineraryRow()">+ Thêm ngày</button></div>' +
+    '<div id="newTourItinerary" class="admin-create-tour-itinerary"></div>' +
+    '</section>' +
+
+    '<section class="admin-create-tour-section">' +
+    '<h4>Phần 5 - Dịch vụ</h4>' +
+    '<div class="admin-create-tour-service-grid">' +
+    '<div>' +
+    '<div class="admin-create-tour-row-head"><h5>Bao gồm (includes)</h5><button type="button" class="admin-btn-ghost" onclick="adminCreateTourAddInclude()">+ Thêm</button></div>' +
+    '<div id="newTourIncludes" class="admin-create-tour-lines"></div>' +
+    '</div>' +
+    '<div>' +
+    '<div class="admin-create-tour-row-head"><h5>Không bao gồm (excludes)</h5><button type="button" class="admin-btn-ghost" onclick="adminCreateTourAddExclude()">+ Thêm</button></div>' +
+    '<div id="newTourExcludes" class="admin-create-tour-lines"></div>' +
+    '</div>' +
+    '</div>' +
+    '</section>' +
+
+    '<section class="admin-create-tour-section" id="adminEditExtraSection" style="display:none">' +
+    '<div class="admin-create-tour-row-head"><h4>Phần 6 - Lịch khởi hành</h4><button type="button" class="admin-btn-ghost" onclick="adminEditTourScheduleAdd()">+ Thêm lịch mới</button></div>' +
+    '<div style="overflow:auto;border:1px solid #e5e7eb;border-radius:10px">' +
+    '<table class="admin-table" style="min-width:1180px;margin:0">' +
+    '<thead><tr><th>Ngày đi</th><th>Ngày về</th><th>Giá Người Lớn</th><th>Giá Trẻ em</th><th>Giá em bé</th><th>Ghi chú</th><th>Tổng chỗ</th><th>Còn</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>' +
+    '<tbody id="adminEditSchedulesBody"><tr><td colspan="10" style="text-align:center;color:#9ca3af;padding:14px">Chưa có lịch khởi hành</td></tr></tbody>' +
+    '</table>' +
+    '</div>' +
+    '</section>' +
+    '</div>' +
+    '<div class="admin-create-tour-foot">' +
+    '<button type="button" class="admin-btn-primary" id="adminCreateTourSubmitBtn" onclick="adminSubmitCreateTour()">Tạo tour</button>' +
+    '</div>' +
+    '</div>';
+
+  document.body.appendChild(modal);
+  return modal;
+}
+
+function adminOpenCreateTourModal() {
+  if (!adminCanCreateTours()) {
+    showToast('❌ Nhân viên không có quyền thêm tour');
+    return;
+  }
+
+  var modal = adminCreateTourEnsureModal();
+  if (!modal) return;
+  adminSetCreateTourModalMode('create');
+  modal.classList.add('open');
+  adminResetCreateTourForm();
+  adminLoadCreateTourCategories();
+}
+
+async function adminOpenEditTourModalByIdx(idx) {
+  var tours = (Array.isArray(ADMIN_TOUR_API_CACHE) && ADMIN_TOUR_API_CACHE.length)
+    ? ADMIN_TOUR_API_CACHE
+    : adminGetTours();
+  var row = tours[idx];
+  if (!row) {
+    showToast('❌ Không tìm thấy tour');
+    return;
+  }
+
+  var slug = String(row.slug || '').trim();
+  var tourId = String(row._id || row.id || '').trim();
+  if (!slug || !tourId) {
+    showToast('❌ Không tìm thấy thông tin tour để chỉnh sửa');
+    return;
+  }
+
+  var modal = adminCreateTourEnsureModal();
+  if (!modal) return;
+
+  ADMIN_EDIT_TOUR_ID = tourId;
+  ADMIN_EDIT_TOUR_SLUG = slug;
+  adminSetCreateTourModalMode('edit');
+  adminResetCreateTourForm();
+  modal.classList.add('open');
+
+  var submitBtn = document.getElementById('adminCreateTourSubmitBtn');
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Đang tải...';
+  }
+
+  try {
+    var res = await apiAdminGetTour(slug);
+    if (!res || !res.ok) {
+      showToast('❌ Không thể tải dữ liệu tour để chỉnh sửa');
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Lưu thay đổi';
+      }
+      return;
+    }
+
+    var payload = adminTourDetailExtract(res);
+    var tour = payload.tour || {};
+    ADMIN_EDIT_TOUR_STATUS = Number(tour.status || 0);
+    ADMIN_EDIT_TOUR_MIN_PRICE = Number(payload.minPrice || tour.min_price || 0) || 0;
+    ADMIN_EDIT_TOUR_SCHEDULES = Array.isArray(payload.schedules) ? payload.schedules : [];
+
+    var categoryId = '';
+    if (tour.category_id) categoryId = String(tour.category_id);
+    else if (tour.category && (tour.category._id || tour.category.id)) categoryId = String(tour.category._id || tour.category.id);
+
+    await adminLoadCreateTourCategories(categoryId);
+
+    var setVal = function (id, value) {
+      var el = document.getElementById(id);
+      if (el) el.value = value !== undefined && value !== null ? value : '';
+    };
+
+    setVal('newTourName', tour.name || '');
+    setVal('newTourDestination', tour.destination || '');
+    setVal('newTourDepartureCity', tour.departure_city || '');
+    setVal('newTourDays', Number(tour.duration_days || 0) || '');
+    setVal('newTourNights', Number(tour.duration_nights || 0) || 0);
+    setVal('newTourDescription', tour.description || '');
+
+    var highlights = document.getElementById('newTourHighlights');
+    if (highlights) {
+      highlights.innerHTML = '';
+      var hls = Array.isArray(tour.highlights) ? tour.highlights : [];
+      if (!hls.length) adminCreateTourAddHighlight('');
+      else hls.forEach(function (item) { adminCreateTourAddHighlight(item); });
+    }
+
+    var includes = document.getElementById('newTourIncludes');
+    if (includes) {
+      includes.innerHTML = '';
+      var incs = Array.isArray(tour.includes) ? tour.includes : [];
+      if (!incs.length) adminCreateTourAddInclude('');
+      else incs.forEach(function (item) { adminCreateTourAddInclude(item); });
+    }
+
+    var excludes = document.getElementById('newTourExcludes');
+    if (excludes) {
+      excludes.innerHTML = '';
+      var exs = Array.isArray(tour.excludes) ? tour.excludes : [];
+      if (!exs.length) adminCreateTourAddExclude('');
+      else exs.forEach(function (item) { adminCreateTourAddExclude(item); });
+    }
+
+    var itinerary = document.getElementById('newTourItinerary');
+    if (itinerary) {
+      itinerary.innerHTML = '';
+      var items = Array.isArray(tour.itinerary) ? tour.itinerary : [];
+      if (!items.length) {
+        adminCreateTourAddItineraryRow();
+      } else {
+        items
+          .slice()
+          .sort(function (a, b) { return Number(a.day || 0) - Number(b.day || 0); })
+          .forEach(function (it) {
+            adminCreateTourAddItineraryRow(it && it.title ? it.title : '', it && it.description ? it.description : '');
+          });
+      }
+    }
+
+    var imagePreview = document.getElementById('newTourImagesPreview');
+    if (imagePreview) {
+      var oldImages = Array.isArray(tour.images) ? tour.images : [];
+      if (!oldImages.length) {
+        imagePreview.innerHTML = '<div class="admin-create-tour-empty">Ảnh hiện tại: chưa có</div>';
+      } else {
+        imagePreview.innerHTML = oldImages.map(function (url, i) {
+          return '<div class="admin-create-tour-image-item">' +
+            '<img src="' + adminTourDetailEscapeHtml(url) + '" alt="old-img-' + i + '">' +
+            '</div>';
+        }).join('');
+      }
+    }
+
+    adminEditTourUpdateHeaderMeta({
+      status: ADMIN_EDIT_TOUR_STATUS,
+      createdAt: tour.created_at || tour.createdAt,
+      updatedAt: tour.updated_at || tour.updatedAt,
+      minPrice: ADMIN_EDIT_TOUR_MIN_PRICE
+    });
+    adminEditTourRenderSchedulesTable();
+
+    showToast('✏️ Đang chỉnh sửa tour: ' + (tour.name || ''));
+  } catch (e) {
+    showToast('❌ Không thể kết nối server');
+  }
+
+  if (submitBtn) {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Lưu thay đổi';
+  }
+}
+
+function adminCloseCreateTourModal() {
+  var modal = document.getElementById('adminCreateTourModal');
+  if (modal) modal.classList.remove('open');
+  ADMIN_EDIT_TOUR_SCHEDULES = [];
+}
+
+function adminResetCreateTourForm() {
+  ADMIN_CREATE_TOUR_IMAGES = [];
+  if (ADMIN_CREATE_TOUR_MODE !== 'edit') ADMIN_EDIT_TOUR_ID = '';
+  if (ADMIN_CREATE_TOUR_MODE !== 'edit') {
+    ADMIN_EDIT_TOUR_STATUS = 0;
+    ADMIN_EDIT_TOUR_SLUG = '';
+    ADMIN_EDIT_TOUR_MIN_PRICE = 0;
+    ADMIN_EDIT_TOUR_SCHEDULES = [];
+  }
+  var ids = ['newTourName', 'newTourDestination', 'newTourDepartureCity', 'newTourDays', 'newTourNights', 'newTourDescription'];
+  ids.forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  var imageInput = document.getElementById('newTourImages');
+  if (imageInput) imageInput.value = '';
+  var imagePreview = document.getElementById('newTourImagesPreview');
+  if (imagePreview) imagePreview.innerHTML = '';
+
+  var highlights = document.getElementById('newTourHighlights');
+  var itinerary = document.getElementById('newTourItinerary');
+  var includes = document.getElementById('newTourIncludes');
+  var excludes = document.getElementById('newTourExcludes');
+  var schedulesBody = document.getElementById('adminEditSchedulesBody');
+  if (highlights) highlights.innerHTML = '';
+  if (itinerary) itinerary.innerHTML = '';
+  if (includes) includes.innerHTML = '';
+  if (excludes) excludes.innerHTML = '';
+  if (schedulesBody) schedulesBody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#9ca3af;padding:14px">Chưa có lịch khởi hành</td></tr>';
+
+  adminCreateTourAddHighlight('');
+  adminCreateTourAddItineraryRow();
+  adminCreateTourAddInclude('');
+  adminCreateTourAddExclude('');
+}
+
+function adminExtractCategoriesFromRes(res) {
+  if (!res || !res.ok) return [];
+  var data = res.data || {};
+  var result = data.result !== undefined ? data.result : data;
+  if (Array.isArray(result)) return result;
+  if (Array.isArray(result && result.categories)) return result.categories;
+  if (Array.isArray(result && result.items)) return result.items;
+  if (Array.isArray(data.categories)) return data.categories;
+  if (Array.isArray(data.items)) return data.items;
+  return [];
+}
+
+async function adminLoadCreateTourCategories(selectedId) {
+  var select = document.getElementById('newTourCategory');
+  if (!select) return;
+  select.innerHTML = '<option value="">Đang tải danh mục...</option>';
+  try {
+    var res = await apiGetCategories({ page: 1, limit: 200 });
+    var cats = adminExtractCategoriesFromRes(res);
+    if (!cats.length) {
+      select.innerHTML = '<option value="">Không có danh mục</option>';
+      return;
+    }
+    select.innerHTML = '<option value="">Chọn danh mục</option>' + cats.map(function (c) {
+      return '<option value="' + adminTourDetailEscapeHtml(c._id || c.id || '') + '">' + adminTourDetailEscapeHtml(c.name || 'Danh mục') + '</option>';
+    }).join('');
+    if (selectedId) select.value = String(selectedId);
+  } catch (e) {
+    select.innerHTML = '<option value="">Không tải được danh mục</option>';
+  }
+}
+
+function adminCreateTourAddLine(containerId, placeholder, value) {
+  var wrap = document.getElementById(containerId);
+  if (!wrap) return;
+  var row = document.createElement('div');
+  row.className = 'admin-create-tour-line';
+  row.innerHTML =
+    '<input type="text" class="admin-create-tour-line-input" placeholder="' + adminTourDetailEscapeHtml(placeholder) + '" value="' + adminTourDetailEscapeHtml(value || '') + '">' +
+    '<button type="button" class="admin-btn-ghost" onclick="this.closest(\'.admin-create-tour-line\').remove()">Xóa</button>';
+  wrap.appendChild(row);
+}
+
+function adminCreateTourAddHighlight(value) { adminCreateTourAddLine('newTourHighlights', 'Ví dụ: Đồi cát bay Mũi Né', value); }
+function adminCreateTourAddInclude(value) { adminCreateTourAddLine('newTourIncludes', 'Ví dụ: Hướng dẫn viên', value); }
+function adminCreateTourAddExclude(value) { adminCreateTourAddLine('newTourExcludes', 'Ví dụ: Chi phí cá nhân', value); }
+
+function adminCreateTourRenumberDays() {
+  var rows = document.querySelectorAll('#newTourItinerary .admin-create-tour-itinerary-row');
+  rows.forEach(function (row, idx) {
+    var dayEl = row.querySelector('.admin-create-tour-day');
+    if (dayEl) dayEl.textContent = 'Ngày ' + (idx + 1);
+  });
+}
+
+function adminCreateTourAddItineraryRow(title, desc) {
+  var wrap = document.getElementById('newTourItinerary');
+  if (!wrap) return;
+  var day = wrap.querySelectorAll('.admin-create-tour-itinerary-row').length + 1;
+  var row = document.createElement('div');
+  row.className = 'admin-create-tour-itinerary-row';
+  row.innerHTML =
+    '<div class="admin-create-tour-itinerary-head">' +
+    '<span class="admin-create-tour-day">Ngày ' + day + '</span>' +
+    '<button type="button" class="admin-btn-ghost" onclick="this.closest(\'.admin-create-tour-itinerary-row\').remove();adminCreateTourRenumberDays()">Xóa</button>' +
+    '</div>' +
+    '<div class="admin-create-field-block">' +
+    '<label class="admin-create-field-label">Tiêu đề <span class="admin-required">*</span></label>' +
+    '<input type="text" class="admin-create-it-title" placeholder="Ví dụ: HCM - Mũi Né" value="' + adminTourDetailEscapeHtml(title || '') + '">' +
+    '</div>' +
+    '<div class="admin-create-field-block">' +
+    '<label class="admin-create-field-label">Mô tả <span class="admin-required">*</span></label>' +
+    '<textarea class="admin-create-it-desc" rows="2" placeholder="Ví dụ: Di chuyển Mũi Né, nhận phòng resort, tắm biển, ăn hải sản tươi">' + adminTourDetailEscapeHtml(desc || '') + '</textarea>' +
+    '</div>';
+  wrap.appendChild(row);
+}
+
+function adminCreateTourHandleImages(input) {
+  var files = Array.from((input && input.files) || []);
+  if (!files.length) return;
+
+  var merged = ADMIN_CREATE_TOUR_IMAGES.concat(files);
+  if (merged.length > 10) {
+    showToast('⚠️ Tối đa 10 ảnh');
+    input.value = '';
+    return;
+  }
+
+  ADMIN_CREATE_TOUR_IMAGES = merged;
+  input.value = '';
+  adminCreateTourRenderImages();
+}
+
+function adminCreateTourRemoveImage(idx) {
+  ADMIN_CREATE_TOUR_IMAGES = ADMIN_CREATE_TOUR_IMAGES.filter(function (_, i) { return i !== idx; });
+  adminCreateTourRenderImages();
+}
+
+function adminCreateTourRenderImages() {
+  var box = document.getElementById('newTourImagesPreview');
+  if (!box) return;
+  if (!ADMIN_CREATE_TOUR_IMAGES.length) {
+    box.innerHTML = '<div class="admin-create-tour-empty">Chưa có ảnh nào</div>';
+    return;
+  }
+
+  box.innerHTML = ADMIN_CREATE_TOUR_IMAGES.map(function (file, idx) {
+    var url = URL.createObjectURL(file);
+    return '<div class="admin-create-tour-image-item">' +
+      '<img src="' + url + '" alt="img-' + idx + '">' +
+      '<button type="button" onclick="adminCreateTourRemoveImage(' + idx + ')">✕</button>' +
+      '</div>';
+  }).join('');
+}
+
+function adminCreateTourCollectLines(containerId) {
+  return Array.from(document.querySelectorAll('#' + containerId + ' .admin-create-tour-line-input'))
+    .map(function (el) { return String(el.value || '').trim(); })
+    .filter(function (v) { return !!v; });
+}
+
+function adminCreateTourCollectItinerary() {
+  var rows = Array.from(document.querySelectorAll('#newTourItinerary .admin-create-tour-itinerary-row'));
+  var items = [];
+  for (var i = 0; i < rows.length; i++) {
+    var title = String(rows[i].querySelector('.admin-create-it-title')?.value || '').trim();
+    var desc = String(rows[i].querySelector('.admin-create-it-desc')?.value || '').trim();
+    if (!title || !desc) return { ok: false, message: '⚠️ Vui lòng nhập đủ tiêu đề và mô tả cho mỗi ngày hành trình.' };
+    items.push({ day: i + 1, title: title, description: desc });
+  }
+  return { ok: true, value: items };
+}
+
+async function adminSubmitCreateTour() {
+  var isEditMode = ADMIN_CREATE_TOUR_MODE === 'edit' && !!ADMIN_EDIT_TOUR_ID;
+  if (!isEditMode && !adminCanCreateTours()) {
+    showToast('❌ Nhân viên không có quyền thêm tour');
+    return;
+  }
+
+  var name = String(document.getElementById('newTourName')?.value || '').trim();
+  var categoryId = String(document.getElementById('newTourCategory')?.value || '').trim();
+  var destination = String(document.getElementById('newTourDestination')?.value || '').trim();
+  var departureCity = String(document.getElementById('newTourDepartureCity')?.value || '').trim();
+  var days = Number(document.getElementById('newTourDays')?.value || 0);
+  var nights = Number(document.getElementById('newTourNights')?.value || 0);
+  var description = String(document.getElementById('newTourDescription')?.value || '').trim();
+
+  if (!name || !categoryId || !destination || !departureCity || !days || days < 1 || nights < 0) {
+    showToast('⚠️ Vui lòng nhập đầy đủ các trường bắt buộc ở phần Thông tin cơ bản.');
+    return;
+  }
+  if (!isEditMode && !ADMIN_CREATE_TOUR_IMAGES.length) {
+    showToast('⚠️ Vui lòng upload ít nhất 1 ảnh.');
+    return;
+  }
+
+  var highlights = adminCreateTourCollectLines('newTourHighlights');
+  var includes = adminCreateTourCollectLines('newTourIncludes');
+  var excludes = adminCreateTourCollectLines('newTourExcludes');
+  var itineraryRes = adminCreateTourCollectItinerary();
+  if (!itineraryRes.ok) {
+    showToast(itineraryRes.message);
+    return;
+  }
+
+  var submitBtn = document.getElementById('adminCreateTourSubmitBtn');
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = isEditMode ? 'Đang lưu...' : 'Đang tạo...';
+  }
+
+  var form = new FormData();
+  form.append('name', name);
+  form.append('category_id', categoryId);
+  form.append('destination', destination);
+  form.append('departure_city', departureCity);
+  form.append('duration_days', String(days));
+  form.append('duration_nights', String(nights));
+  if (description) form.append('description', description);
+  form.append('highlights', JSON.stringify(highlights));
+  form.append('itinerary', JSON.stringify(itineraryRes.value));
+  form.append('includes', JSON.stringify(includes));
+  form.append('excludes', JSON.stringify(excludes));
+  ADMIN_CREATE_TOUR_IMAGES.forEach(function (file) { form.append('images', file); });
+
+  try {
+    var res = isEditMode
+      ? await apiAdminUpdateTour(ADMIN_EDIT_TOUR_ID, form)
+      : await apiAdminCreateTour(form);
+    if (res && res.ok) {
+      showToast(isEditMode ? '✅ Cập nhật tour thành công' : '✅ Tạo tour thành công');
+      if (isEditMode && ADMIN_EDIT_TOUR_SLUG) {
+        await adminEditTourScheduleRefresh();
+      }
+      adminCloseCreateTourModal();
+      ADMIN_TOUR_PAGE = 1;
+      await adminRenderTours();
+      return;
+    }
+
+    var msg = (res && res.data && (res.data.message || res.data.error)) || (isEditMode ? 'Không thể cập nhật tour' : 'Không thể tạo tour');
+    showToast('❌ ' + msg);
+  } catch (e) {
+    showToast('❌ Không thể kết nối server');
+  }
+
+  if (submitBtn) {
+    submitBtn.disabled = false;
+    submitBtn.textContent = isEditMode ? 'Lưu thay đổi' : 'Tạo tour';
+  }
+}
+
+// ===== SAVE TOUR =====
+function adminPublishTour() { adminDoSaveTour(true); }
+function adminSaveTourDraft() { adminDoSaveTour(false); }
+
+function adminDoSaveTour(publish) {
+  var name = (document.getElementById('atfName').value || '').trim();
+  var location = (document.getElementById('atfLocation').value || '').trim();
+  var price = (document.getElementById('atfPrice').value || '').trim();
+  var duration = (document.getElementById('atfDuration').value || '').trim();
+  var desc = (document.getElementById('atfDesc').innerText || '').trim();
+  var idxStr = document.getElementById('atfName').dataset.idx;
+  var isEditMode = idxStr !== undefined && idxStr !== null && String(idxStr).trim() !== '';
+
+  if (!isEditMode && !adminCanCreateTours()) {
+    showToast('❌ Nhân viên không có quyền thêm tour');
+    return;
+  }
+
+  if (!name) { showToast('⚠️ Vui lòng nhập tên tour'); return; }
+  if (!location) { showToast('⚠️ Vui lòng chọn địa điểm'); return; }
+
+  var days = [];
+  document.querySelectorAll('.atf-day-item').forEach(function (row) {
+    var t = row.querySelector('.day-title-inp');
+    var d = row.querySelector('.day-desc-inp');
+    days.push({ title: t ? t.value : '', desc: d ? d.value : '' });
+  });
+
+  var schedules = [];
+  document.querySelectorAll('.atf-schedule-row').forEach(function (row) {
+    var d = row.querySelector('.sched-date-inp');
+    var s = row.querySelector('.slot-inp');
+    if (d && d.value) schedules.push({ date: d.value, slots: parseInt(s ? s.value : 0) || 0 });
+  });
+
+  var tours = adminGetTours();
+  var tour = { name: name, location: location, price: price ? price + 'đ' : '—', duration: duration, desc: desc, active: publish, schedules: schedules, days: days };
+
+  if (idxStr !== '') {
+    var idx = parseInt(idxStr);
+    tour.id = tours[idx].id;
+    tours[idx] = tour;
+    showToast('✅ Đã cập nhật tour: ' + name);
+  } else {
+    tour.id = tours.reduce(function (m, t) { return Math.max(m, t.id || 0); }, 0) + 1;
+    tours.push(tour);
+    showToast(publish ? '✅ Đã xuất bản tour: ' + name : '📝 Đã lưu bản nháp: ' + name);
+  }
+
+  adminSaveTours(tours);
+  adminShowTourList();
+}
+
+// ===== ITINERARY DAYS =====
+var dayCount = 0;
+function atfAddDay(title, desc) {
+  dayCount++;
+  var list = document.getElementById('atfDaysList');
+  if (!list) return;
+  var div = document.createElement('div');
+  div.className = 'atf-day-item';
+  div.innerHTML =
+    '<div class="atf-day-header">' +
+    '<span class="atf-day-badge">Ngày ' + dayCount + '</span>' +
+    '<button class="atf-day-del" onclick="atfRemoveDay(this)" title="Xóa ngày">✕</button>' +
+    '</div>' +
+    '<div class="atf-day-body">' +
+    '<input class="day-title-inp" type="text" placeholder="Tiêu đề: Tham quan đảo & Chèo thuyền Kayak" value="' + (title || '') + '">' +
+    '<textarea class="day-desc-inp" placeholder="Mô tả hoạt động trong ngày...">' + (desc || '') + '</textarea>' +
+    '</div>';
+  list.appendChild(div);
+}
+
+function atfRemoveDay(btn) {
+  btn.closest('.atf-day-item').remove();
+  // Re-number
+  dayCount = 0;
+  document.querySelectorAll('.atf-day-item').forEach(function (item) {
+    dayCount++;
+    var badge = item.querySelector('.atf-day-badge');
+    if (badge) badge.textContent = 'Ngày ' + dayCount;
+  });
+}
+
+// ===== SCHEDULE =====
+function atfAddSchedule() { atfAddScheduleRow('', 20); }
+function atfAddScheduleRow(date, slots) {
+  var list = document.getElementById('atfScheduleList');
+  if (!list) return;
+  var empty = list.querySelector('p');
+  if (empty) empty.remove();
+  var row = document.createElement('div');
+  row.className = 'atf-schedule-row';
+  row.innerHTML =
+    '<input class="sched-date-inp" type="date" value="' + (date || '') + '">' +
+    '<input class="slot-inp" type="number" placeholder="Slots" value="' + (slots || 20) + '" min="1">' +
+    '<button class="atf-sched-del" onclick="this.parentElement.remove()" title="Xóa">✕</button>';
+  list.appendChild(row);
+}
+
+// ===== IMAGE UPLOAD =====
+function atfAddImages(input) {
+  if (!input.files) return;
+  var grid = document.getElementById('atfImgGrid');
+  Array.from(input.files).slice(0, 6).forEach(function (file) {
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      var div = document.createElement('div');
+      div.className = 'atf-img-preview';
+      div.style.backgroundImage = 'url(' + e.target.result + ')';
+      div.innerHTML = '<button onclick="this.parentElement.remove()" title="Xóa">✕</button>';
+      grid.insertBefore(div, grid.querySelector('.atf-img-upload'));
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// ===== TEXT FORMAT =====
+function atfFormat(cmd) { document.execCommand(cmd, false, null); }
+
+// ============================================================
+// COUPONS – Quản lý Mã giảm giá
+// ============================================================
+var ADMIN_COUPON_PAGE = 1;
+var ADMIN_COUPON_PER = 10;
+var ADMIN_COUPON_KEYWORD = '';
+var ADMIN_COUPON_IS_ACTIVE = '';
+var ADMIN_COUPON_ROWS_CACHE = [];
+var ADMIN_COUPON_CONFIRM_RESOLVE = null;
+
+var ADMIN_COUPON_ERROR_VI = {
+  COUPON_CODE_IS_REQUIRED: 'Vui lòng nhập mã giảm giá.',
+  COUPON_CODE_MUST_BE_A_STRING: 'Mã giảm giá phải là chuỗi ký tự.',
+  COUPON_CODE_LENGTH_INVALID: 'Mã giảm giá phải từ 3 đến 20 ký tự.',
+  COUPON_CODE_ALREADY_EXISTS: 'Mã giảm giá đã tồn tại.',
+  COUPON_VALUE_IS_REQUIRED: 'Vui lòng nhập giá trị giảm.',
+  COUPON_VALUE_MUST_BE_A_POSITIVE_INTEGER: 'Giá trị giảm phải là số nguyên dương.',
+  COUPON_MIN_ORDER_VALUE_IS_REQUIRED: 'Vui lòng nhập giá trị đơn tối thiểu.',
+  COUPON_MIN_ORDER_VALUE_MUST_BE_NON_NEGATIVE: 'Đơn tối thiểu phải là số nguyên không âm.',
+  COUPON_MAX_USAGE_IS_REQUIRED: 'Vui lòng nhập tổng lượt sử dụng tối đa.',
+  COUPON_MAX_USAGE_MUST_BE_A_POSITIVE_INTEGER: 'Tổng lượt sử dụng tối đa phải là số nguyên dương.',
+  COUPON_EXPIRES_AT_IS_REQUIRED: 'Vui lòng chọn hạn dùng.',
+  COUPON_EXPIRES_AT_IS_INVALID: 'Hạn dùng không đúng định dạng ISO8601.',
+  COUPON_EXPIRES_AT_MUST_BE_IN_FUTURE: 'Hạn dùng phải lớn hơn thời điểm hiện tại.'
+};
+
+function adminCouponTranslateErrorMessage(msg) {
+  if (!msg) return '';
+  var raw = String(msg).trim();
+  if (ADMIN_COUPON_ERROR_VI[raw]) return ADMIN_COUPON_ERROR_VI[raw];
+
+  var lower = raw.toLowerCase();
+  if (lower.includes('already exists') || lower.includes('đã tồn tại')) return 'Mã giảm giá đã tồn tại.';
+  if (lower.includes('iso8601') || lower.includes('invalid date')) return 'Hạn dùng không hợp lệ.';
+  if (lower.includes('future')) return 'Hạn dùng phải lớn hơn thời điểm hiện tại.';
+
+  return raw;
+}
+
+function adminCouponExtractErrorMessage(res, fallback) {
+  var fb = fallback || 'Thao tác thất bại';
+  if (!res || !res.data) return fb;
+
+  var data = res.data || {};
+  var errors = data.errors;
+  if (errors) {
+    if (Array.isArray(errors) && errors.length) {
+      var arrMsg = errors[0] && (errors[0].msg || errors[0].message || errors[0].errorMessage || errors[0]);
+      return adminCouponTranslateErrorMessage(arrMsg) || fb;
+    }
+
+    var firstVal = Object.values(errors)[0];
+    if (Array.isArray(firstVal) && firstVal.length) {
+      var groupedMsg = firstVal[0] && (firstVal[0].msg || firstVal[0].message || firstVal[0].errorMessage || firstVal[0]);
+      return adminCouponTranslateErrorMessage(groupedMsg) || fb;
+    }
+
+    var firstMsg = firstVal && (firstVal.msg || firstVal.message || firstVal.errorMessage || firstVal);
+    if (firstMsg) return adminCouponTranslateErrorMessage(firstMsg) || fb;
+  }
+
+  if (data.message) return adminCouponTranslateErrorMessage(data.message) || fb;
+  if (data.error) return adminCouponTranslateErrorMessage(data.error) || fb;
+  return fb;
+}
+
+function adminCouponEscapeHtml(val) {
+  return String(val || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function adminCouponFormatValue(value) {
+  var n = Number(value);
+  if (!isFinite(n) || n <= 0) return '0đ';
+  return Math.round(n).toLocaleString('vi-VN') + 'đ';
+}
+
+function adminCouponFormatCondition(minOrderValue) {
+  var n = Number(minOrderValue);
+  if (!isFinite(n) || n <= 0) return 'Không yêu cầu';
+  return '≥ ' + Math.round(n).toLocaleString('vi-VN') + 'đ';
+}
+
+function adminCouponFormatDate(iso) {
+  if (!iso) return '—';
+  var d = new Date(iso);
+  if (isNaN(d.getTime())) return '—';
+  var dd = String(d.getDate()).padStart(2, '0');
+  var mm = String(d.getMonth() + 1).padStart(2, '0');
+  var yyyy = d.getFullYear();
+  return dd + '/' + mm + '/' + yyyy;
+}
+
+function adminCouponToInputDate(iso) {
+  if (!iso) return '';
+  var d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  var mm = String(d.getMonth() + 1).padStart(2, '0');
+  var dd = String(d.getDate()).padStart(2, '0');
+  return d.getFullYear() + '-' + mm + '-' + dd;
+}
+
+function adminExtractCoupons(response) {
+  if (!response || !response.ok) return [];
+  var data = response.data || {};
+  var result = data.result !== undefined ? data.result : data;
+
+  if (Array.isArray(result)) return result;
+  if (Array.isArray(result && result.coupons)) return result.coupons;
+  if (Array.isArray(result && result.items)) return result.items;
+  if (Array.isArray(data.coupons)) return data.coupons;
+  if (Array.isArray(data.items)) return data.items;
+  return [];
+}
+
+function adminExtractCouponPagination(response, fallbackCount) {
+  var total = Number(fallbackCount) || 0;
+  var currentPage = ADMIN_COUPON_PAGE;
+  var limit = ADMIN_COUPON_PER;
+
+  if (response && response.data) {
+    var data = response.data;
+    var result = data.result !== undefined ? data.result : data;
+    var pagination = result && result.pagination ? result.pagination : (data.pagination || null);
+    if (pagination) {
+      if (pagination.total !== undefined) total = Number(pagination.total) || total;
+      if (pagination.page !== undefined) currentPage = Number(pagination.page) || currentPage;
+      if (pagination.limit !== undefined) limit = Number(pagination.limit) || limit;
+    }
+  }
+
+  return {
+    total: Math.max(0, total),
+    page: Math.max(1, currentPage),
+    limit: Math.max(1, limit)
+  };
+}
+
+function adminCouponSearch() {
+  ADMIN_COUPON_KEYWORD = (document.getElementById('adminCouponSearch')?.value || '').trim();
+  ADMIN_COUPON_PAGE = 1;
+  adminRenderCouponsTable();
+}
+
+function adminCouponFilterStatus() {
+  ADMIN_COUPON_IS_ACTIVE = document.getElementById('adminCouponStatusFilter')?.value || '';
+  ADMIN_COUPON_PAGE = 1;
+  adminRenderCouponsTable();
+}
+
+function adminCouponGoPage(page) {
+  ADMIN_COUPON_PAGE = Math.max(1, Number(page) || 1);
+  adminRenderCouponsTable();
+}
+
+function adminCouponConfirmOpen(text, title) {
+  var modal = document.getElementById('couponConfirmModal');
+  var textEl = document.getElementById('couponConfirmText');
+  var titleEl = document.getElementById('couponConfirmTitle');
+  if (!modal) return Promise.resolve(false);
+  if (titleEl) titleEl.textContent = title || 'Xác nhận thao tác';
+  if (textEl) textEl.textContent = text || 'Bạn có chắc muốn tiếp tục?';
+  modal.style.display = 'flex';
+
+  return new Promise(function (resolve) {
+    ADMIN_COUPON_CONFIRM_RESOLVE = resolve;
+  });
+}
+
+function adminCouponConfirmClose(accepted) {
+  var modal = document.getElementById('couponConfirmModal');
+  if (modal) modal.style.display = 'none';
+  if (ADMIN_COUPON_CONFIRM_RESOLVE) {
+    var resolve = ADMIN_COUPON_CONFIRM_RESOLVE;
+    ADMIN_COUPON_CONFIRM_RESOLVE = null;
+    resolve(!!accepted);
+  }
+}
+
+function adminCouponCreate() {
+  var modal = document.getElementById('couponCreateModal');
+  if (!modal) return;
+
+  var codeEl = document.getElementById('couponCreateCode');
+  var valueEl = document.getElementById('couponCreateValue');
+  var minEl = document.getElementById('couponCreateMinOrderValue');
+  var maxEl = document.getElementById('couponCreateMaxUsage');
+  var expiresEl = document.getElementById('couponCreateExpiresAt');
+
+  if (codeEl) codeEl.value = '';
+  if (valueEl) valueEl.value = '';
+  if (minEl) minEl.value = '';
+  if (maxEl) maxEl.value = '';
+  if (expiresEl) expiresEl.value = '';
+
+  modal.style.display = 'flex';
+  if (codeEl) codeEl.focus();
+}
+
+function adminCouponHideCreateModal() {
+  var modal = document.getElementById('couponCreateModal');
+  if (modal) modal.style.display = 'none';
+}
+
+function adminCouponSetCreateLoading(isLoading) {
+  var saveBtn = document.getElementById('couponCreateSaveBtn');
+  var cancelBtn = document.getElementById('couponCreateCancelBtn');
+  var ids = ['couponCreateCode', 'couponCreateValue', 'couponCreateMinOrderValue', 'couponCreateMaxUsage', 'couponCreateExpiresAt'];
+
+  ids.forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.disabled = !!isLoading;
+  });
+
+  if (cancelBtn) cancelBtn.disabled = !!isLoading;
+  if (saveBtn) {
+    if (!saveBtn.dataset.defaultText) saveBtn.dataset.defaultText = saveBtn.textContent;
+    saveBtn.disabled = !!isLoading;
+    saveBtn.textContent = isLoading ? 'Đang lưu...' : saveBtn.dataset.defaultText;
+  }
+}
+
+function adminCouponHideEditModal() {
+  var modal = document.getElementById('couponEditModal');
+  if (modal) modal.style.display = 'none';
+}
+
+function adminCouponSetEditLoading(isLoading) {
+  var saveBtn = document.getElementById('couponEditSaveBtn');
+  var cancelBtn = document.getElementById('couponEditCancelBtn');
+  var ids = ['couponEditCode', 'couponEditValue', 'couponEditMinOrderValue', 'couponEditMaxUsage', 'couponEditExpiresAt'];
+
+  ids.forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.disabled = !!isLoading;
+  });
+
+  if (cancelBtn) cancelBtn.disabled = !!isLoading;
+  if (saveBtn) {
+    if (!saveBtn.dataset.defaultText) saveBtn.dataset.defaultText = saveBtn.textContent;
+    saveBtn.disabled = !!isLoading;
+    saveBtn.textContent = isLoading ? 'Đang lưu...' : saveBtn.dataset.defaultText;
+  }
+}
+
+async function adminCouponSubmitCreate() {
+  var code = (document.getElementById('couponCreateCode')?.value || '').trim().toUpperCase();
+  var value = Number(document.getElementById('couponCreateValue')?.value || 0);
+  var min_order_value = Number(document.getElementById('couponCreateMinOrderValue')?.value || 0);
+  var max_usage = Number(document.getElementById('couponCreateMaxUsage')?.value || 0);
+  var expiresDate = (document.getElementById('couponCreateExpiresAt')?.value || '').trim();
+
+  if (!code) { showToast('⚠️ Vui lòng nhập code'); return; }
+  if (!isFinite(value) || value <= 0) { showToast('⚠️ Giá trị giảm không hợp lệ'); return; }
+  if (!isFinite(min_order_value) || min_order_value < 0) { showToast('⚠️ Đơn tối thiểu không hợp lệ'); return; }
+  if (!isFinite(max_usage) || max_usage <= 0) { showToast('⚠️ Tổng lượt sử dụng tối đa không hợp lệ'); return; }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(expiresDate)) { showToast('⚠️ Vui lòng chọn hạn dùng'); return; }
+
+  adminCouponSetCreateLoading(true);
+  try {
+    var payload = {
+      code: code,
+      value: Math.round(value),
+      min_order_value: Math.round(min_order_value),
+      max_usage: Math.round(max_usage),
+      expires_at: expiresDate + 'T00:00:00.000Z'
+    };
+
+    var res = await apiAdminCreateCoupon(payload);
+    if (res && res.ok) {
+      showToast('✅ Đã thêm mã giảm giá');
+      adminCouponHideCreateModal();
+      ADMIN_COUPON_PAGE = 1;
+      adminRenderCouponsTable();
+      return;
+    }
+
+    var msg = adminCouponExtractErrorMessage(res, 'Không thể thêm mã giảm giá');
+    showToast('❌ ' + msg);
+  } catch (e) {
+    showToast('❌ Không thể kết nối server');
+  } finally {
+    adminCouponSetCreateLoading(false);
+  }
+}
+
+async function adminCouponToggle(id, inputEl) {
+  if (!id) {
+    showToast('⚠️ Không tìm thấy mã giảm giá');
+    return;
+  }
+
+  // onchange chạy sau khi checkbox đã đổi, nên trạng thái trước đó là đảo ngược lại
+  var previousChecked = inputEl ? !inputEl.checked : false;
+  var confirmed = await adminCouponConfirmOpen(
+    'Bạn có chắc muốn thay đổi trạng thái mã giảm giá này?',
+    'Xác nhận thay đổi trạng thái'
+  );
+  if (!confirmed) {
+    if (inputEl) inputEl.checked = previousChecked;
+    return;
+  }
+
+  if (inputEl) inputEl.disabled = true;
+  try {
+    // Toggle trạng thái bằng endpoint chuẩn PATCH /api/coupons/:id/toggle
+    var res = await apiAdminToggleCoupon(id);
+    if (res && res.ok) {
+      showToast('✅ Đã cập nhật trạng thái mã giảm giá');
+      adminRenderCouponsTable();
+      return;
+    }
+    if (inputEl) inputEl.checked = previousChecked;
+    var msg = adminCouponExtractErrorMessage(res, 'Không thể cập nhật trạng thái');
+    showToast('❌ ' + msg);
+  } catch (e) {
+    if (inputEl) inputEl.checked = previousChecked;
+    showToast('❌ Không thể kết nối server');
+  } finally {
+    if (inputEl) inputEl.disabled = false;
+  }
+}
+
+function adminCouponEdit(id) {
+  var list = ADMIN_COUPON_ROWS_CACHE || [];
+  var c = list.find(function (x) { return (x._id || x.id) === id; });
+  if (!c) { showToast('⚠️ Không tìm thấy mã giảm giá'); return; }
+
+  var modal = document.getElementById('couponEditModal');
+  if (!modal) return;
+
+  var idEl = document.getElementById('couponEditId');
+  var codeEl = document.getElementById('couponEditCode');
+  var valueEl = document.getElementById('couponEditValue');
+  var minEl = document.getElementById('couponEditMinOrderValue');
+  var maxEl = document.getElementById('couponEditMaxUsage');
+  var expiresEl = document.getElementById('couponEditExpiresAt');
+
+  if (idEl) idEl.value = c._id || c.id || '';
+  if (codeEl) codeEl.value = c.code || '';
+  if (valueEl) valueEl.value = Number(c.value) || 0;
+  if (minEl) minEl.value = Number(c.min_order_value) || 0;
+  if (maxEl) maxEl.value = Number(c.max_usage) || 0;
+  if (expiresEl) expiresEl.value = adminCouponToInputDate(c.expires_at) || '';
+
+  modal.style.display = 'flex';
+  if (codeEl) codeEl.focus();
+}
+
+async function adminCouponSubmitEdit() {
+  var id = (document.getElementById('couponEditId')?.value || '').trim();
+  var code = (document.getElementById('couponEditCode')?.value || '').trim().toUpperCase();
+  var value = Number(document.getElementById('couponEditValue')?.value || 0);
+  var min_order_value = Number(document.getElementById('couponEditMinOrderValue')?.value || 0);
+  var max_usage = Number(document.getElementById('couponEditMaxUsage')?.value || 0);
+  var expiresDate = (document.getElementById('couponEditExpiresAt')?.value || '').trim();
+
+  if (!id) { showToast('⚠️ Không tìm thấy coupon cần sửa'); return; }
+  if (!code) { showToast('⚠️ Vui lòng nhập code'); return; }
+  if (!isFinite(value) || value <= 0) { showToast('⚠️ Giá trị giảm không hợp lệ'); return; }
+  if (!isFinite(min_order_value) || min_order_value < 0) { showToast('⚠️ Đơn tối thiểu không hợp lệ'); return; }
+  if (!isFinite(max_usage) || max_usage <= 0) { showToast('⚠️ Tổng lượt sử dụng tối đa không hợp lệ'); return; }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(expiresDate)) { showToast('⚠️ Vui lòng chọn hạn dùng'); return; }
+
+  adminCouponSetEditLoading(true);
+  try {
+    var payload = {
+      code: code,
+      value: Math.round(value),
+      min_order_value: Math.round(min_order_value),
+      max_usage: Math.round(max_usage),
+      expires_at: expiresDate + 'T00:00:00.000Z'
+    };
+
+    var res = await apiAdminUpdateCoupon(id, payload);
+    if (res && res.ok) {
+      showToast('✅ Đã cập nhật mã giảm giá');
+      adminCouponHideEditModal();
+      adminRenderCouponsTable();
+      return;
+    }
+    var msg = adminCouponExtractErrorMessage(res, 'Không thể cập nhật mã giảm giá');
+    showToast('❌ ' + msg);
+  } catch (e) {
+    showToast('❌ Không thể kết nối server');
+  } finally {
+    adminCouponSetEditLoading(false);
+  }
+}
+
+async function adminRenderCouponsTable() {
+  var tbody = document.getElementById('adminCouponsBody');
+  var footer = document.getElementById('adminCouponsFooter');
+  if (!tbody) return;
+
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#aaa;padding:32px">Đang tải...</td></tr>';
+
+  var coupons = [];
+  var pagination = { total: 0, page: ADMIN_COUPON_PAGE, limit: ADMIN_COUPON_PER };
+  try {
+    var params = {
+      page: ADMIN_COUPON_PAGE,
+      limit: ADMIN_COUPON_PER
+    };
+    if (ADMIN_COUPON_KEYWORD) params.keyword = ADMIN_COUPON_KEYWORD;
+    if (ADMIN_COUPON_IS_ACTIVE !== '') params.is_active = ADMIN_COUPON_IS_ACTIVE;
+
+    var res = await apiAdminGetCoupons(params);
+    coupons = adminExtractCoupons(res);
+    pagination = adminExtractCouponPagination(res, coupons.length);
+  } catch (e) {
+    coupons = [];
+  }
+
+  ADMIN_COUPON_ROWS_CACHE = coupons;
+
+  if (!coupons.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#aaa;padding:32px">Chưa có mã giảm giá</td></tr>';
+    if (footer) footer.innerHTML = '<span style="font-size:0.75rem;color:#aaa">Hiển thị 0 - 0 / 0 mã giảm giá</span>';
+    return;
+  }
+
+  tbody.innerHTML = coupons.map(function (c) {
+    var id = c._id || c.id || '';
+    var used = Number(c.used_count) || 0;
+    var max = Number(c.max_usage);
+    var usageText = used + ' / ' + (isFinite(max) && max > 0 ? max : '∞');
+    var code = adminCouponEscapeHtml(c.code || '—');
+    var value = adminCouponFormatValue(c.value || 0);
+    var condition = adminCouponFormatCondition(c.min_order_value);
+    var expiry = adminCouponFormatDate(c.expires_at);
+    var active = c.is_active !== false;
+
+    return '<tr>' +
+      '<td style="font-weight:700">' + code + '</td>' +
+      '<td>' + value + '</td>' +
+      '<td>' + condition + '</td>' +
+      '<td>' + usageText + '</td>' +
+      '<td>' + expiry + '</td>' +
+      '<td><div style="display:flex;align-items:center;gap:8px">' +
+      '<label class="afp-toggle" style="transform:scale(.88);transform-origin:left center">' +
+      '<input type="checkbox" ' + (active ? 'checked' : '') + ' onchange="adminCouponToggle(\'' + id + '\', this)">' +
+      '<span class="afp-toggle-slider"></span>' +
+      '</label>' +
+      '<span style="font-size:0.78rem;font-weight:600;color:' + (active ? '#2d8a4e' : '#888') + '">' + (active ? 'Đang hoạt động' : 'Ngừng hoạt động') + '</span>' +
+      '</div></td>' +
+      '<td><div style="display:flex;gap:6px">' +
+      '<button class="admin-act-btn" data-id="' + id + '" onclick="adminCouponEdit(this.dataset.id)">Sửa</button>' +
+      '</div></td>' +
+      '</tr>';
+  }).join('');
+
+  var total = Math.max(coupons.length, Number(pagination.total) || 0);
+  var limit = Number(pagination.limit) || ADMIN_COUPON_PER;
+  var page = Number(pagination.page) || ADMIN_COUPON_PAGE;
+  var totalPages = Math.max(1, Math.ceil(total / limit));
+  ADMIN_COUPON_PAGE = Math.min(page, totalPages);
+
+  var pages = '';
+  var startPage = Math.max(1, ADMIN_COUPON_PAGE - 2);
+  var endPage = Math.min(totalPages, startPage + 4);
+  for (var p = startPage; p <= endPage; p++) {
+    pages += '<button class="admin-page-btn' + (p === ADMIN_COUPON_PAGE ? ' active' : '') + '" onclick="adminCouponGoPage(' + p + ')">' + p + '</button>';
+  }
+
+  var from = total ? ((ADMIN_COUPON_PAGE - 1) * limit + 1) : 0;
+  var to = Math.min(ADMIN_COUPON_PAGE * limit, total);
+  if (footer) footer.innerHTML =
+    '<span style="font-size:0.75rem;color:#aaa">Hiển thị ' + from + ' - ' + to + ' / ' + total + ' mã giảm giá</span>' +
+    '<div class="admin-pagination">' +
+    '<button class="admin-page-btn text" onclick="adminCouponGoPage(' + Math.max(1, ADMIN_COUPON_PAGE - 1) + ')">Trước</button>' +
+    pages +
+    '<button class="admin-page-btn text" onclick="adminCouponGoPage(' + Math.min(totalPages, ADMIN_COUPON_PAGE + 1) + ')">Sau</button>' +
+    '</div>';
+}
+
+// Init coupons when tab opens
+var _origSwitchTab = switchTab;
+switchTab = function (name) {
+  _origSwitchTab(name);
+  if (name === 'coupons') adminRenderCouponsTable();
+};
+
+// ============================================================
+// THỐNG KÊ
+// ============================================================
+var statsRevenueChart = null;
+var statsBookingChart = null;
+
+function statsPeriod(btn, days) {
+  document.querySelectorAll('.stats-period').forEach(function (b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+  statsLoadData();
+}
+
+function statsLoadData() {
+  // Đọc dữ liệu thật từ localStorage
+  var db = [];
+  try { db = JSON.parse(localStorage.getItem('vt_userdb') || sessionStorage.getItem('vt_userdb') || '[]'); } catch (e) { }
+
+  var totalBookings = 0;
+  var totalRevenue = 0;
+  var tourBookings = {};
+
+  db.forEach(function (u) {
+    try {
+      var bs = JSON.parse(localStorage.getItem('vt_bookings_' + u.email) || '[]');
+      totalBookings += bs.length;
+      bs.forEach(function (b) {
+        // Parse số tiền
+        var raw = (b.total || b.price || '0').replace(/[^\d]/g, '');
+        totalRevenue += parseInt(raw) || 0;
+        // Đếm theo tour
+        var tname = b.tourName || b.tour || '—';
+        tourBookings[tname] = (tourBookings[tname] || 0) + 1;
+      });
+    } catch (e) { }
+  });
+
+  // KPI
+  var fmtMoney = function (n) {
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M đ';
+    if (n >= 1000) return (n / 1000).toFixed(0) + 'K đ';
+    return n + 'đ';
+  };
+  var el = function (id) { return document.getElementById(id); };
+
+  if (el('statRevenue')) el('statRevenue').textContent = totalRevenue ? fmtMoney(totalRevenue) : '0đ';
+  if (el('statTotalBookings')) el('statTotalBookings').textContent = totalBookings || 0;
+  if (el('statVisitors')) el('statVisitors').textContent = db.length || 0;
+
+  // Rating
+  if (el('statRating')) el('statRating').textContent = '— / 5.0';
+  if (el('statsRatingBig')) el('statsRatingBig').textContent = '—';
+
+  // Donut
+  if (el('statsDonutVal')) el('statsDonutVal').textContent = totalBookings || 0;
+
+  // Tour list
+  var tourList = el('statsToursList');
+  if (tourList) {
+    var entries = Object.entries(tourBookings || {}).sort(function (a, b) { return b[1] - a[1]; }).slice(0, 5);
+    if (!entries.length) {
+      tourList.innerHTML = '<div class="stats-tours-empty"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#ddd" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10z"/></svg><p>Chưa có dữ liệu đặt tour</p></div>';
+    } else {
+      tourList.innerHTML = entries.map(function (e) {
+        var conv = totalBookings > 0 ? Math.round(e[1] / totalBookings * 100) : 0;
+        return '<div class="stats-tour-row">' +
+          '<div class="stats-tour-name-wrap"><div class="stats-tour-img"></div><span class="stats-tour-name">' + e[0] + '</span></div>' +
+          '<div style="font-weight:700">' + e[1] + '</div>' +
+          '<div style="color:#888">—</div>' +
+          '<div><div class="stats-conv-bar"><div class="stats-conv-fill" style="width:' + conv + '%"></div></div>' + conv + '%</div>' +
+          '</div>';
+      }).join('');
+    }
+  }
+}
+
+// Gọi khi switch sang stats
+var _origSwitch2 = switchTab;
+switchTab = function (name) {
+  _origSwitch2(name);
+  if (name === 'stats') statsLoadData();
+};
+
+
+// Promo preview trong trang tours
+function adminRenderPromoPreview() {
+  var grid = document.getElementById('adminPromoPreview');
+  if (!grid) return;
+  var promos = [];
+  try { promos = JSON.parse(localStorage.getItem('vt_admin_promos') || '[]'); } catch (e) { }
+  var active = promos.filter(function (p) { return p.status === 'active'; }).slice(0, 2);
+  var html = active.map(function (p) {
+    var disc = p.type === 'percent' ? p.value + '%' : p.value.toLocaleString() + 'đ';
+    return '<div class="admin-promo-card">' +
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between">' +
+      '<div class="promo-icon">' + (p.type === 'percent' ? '%' : '💰') + '</div>' +
+      '<span class="admin-promo-running">ĐANG CHẠY</span>' +
+      '</div>' +
+      '<div class="admin-promo-name">' + p.name + '</div>' +
+      '<div class="admin-promo-desc">Giảm ' + disc + ' · Hết hạn: ' + (p.end || '—') + '</div>' +
+      '<div class="admin-promo-footer"><span>Hết hạn: ' + (p.end || '—') + '</span><button class="admin-promo-edit" onclick="switchTab(\"coupons\")">Chỉnh sửa</button></div>' +
+      '</div>';
+  }).join('');
+  html += '<div class="admin-promo-card admin-promo-card-add" onclick="switchTab(\"coupons\")">' +
+    '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
+    '<strong>Thêm Ưu đãi Mới</strong>' +
+    '<span>Tạo mã giảm giá hoặc chương trình quà tặng mới</span>' +
+    '</div>';
+  grid.innerHTML = html;
+}
+
+var DASH_PERIOD = 'today';
+var DASH_TOP_LIMIT = 10;
+var DASH_LOADING = false;
+
+function dashNumber(v, fallback) {
+  var n = Number(v);
+  return isFinite(n) ? n : (fallback || 0);
+}
+
+function dashFormatMoney(v) {
+  var n = dashNumber(v, 0);
+  try {
+    return n.toLocaleString('vi-VN') + 'đ';
+  } catch (e) {
+    return n + 'đ';
+  }
+}
+
+function dashFormatCompactMoney(v) {
+  return dashFormatMoney(v);
+}
+
+function dashFormatPercent(v) {
+  var n = dashNumber(v, 0);
+  var sign = n > 0 ? '+' : '';
+  return sign + n.toFixed(1) + '%';
+}
+
+function dashFormatShortDateLabel(label) {
+  if (typeof label !== 'string') return label;
+  var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(label);
+  if (!m) return label;
+  return parseInt(m[3], 10) + '/' + parseInt(m[2], 10);
+}
+
+function dashSetTrendBadge(elId, value) {
+  var badge = document.getElementById(elId);
+  if (!badge) return;
+  var n = dashNumber(value, 0);
+  badge.textContent = dashFormatPercent(n);
+  badge.className = 'stats-kpi-change ' + (n > 0 ? 'up' : (n < 0 ? 'down' : 'neutral'));
+}
+
+function dashGetResult(res) {
+  if (!res || !res.ok) return null;
+  var d = res.data || {};
+  return d.result !== undefined ? d.result : null;
+}
+
+function dashNormalizeTopTours(topToursResult) {
+  if (!topToursResult || !Array.isArray(topToursResult.tours)) return [];
+  return topToursResult.tours.slice(0, DASH_TOP_LIMIT).map(function (item, idx) {
+    var pct = dashNumber(
+      item.percent,
+      dashNumber(item.percentage, dashNumber(item.booking_percentage, dashNumber(item.ratio, dashNumber(item.share_percent, 0))))
+    );
+    return {
+      rank: idx + 1,
+      name: item.name || item.tour_name || item.tour_id || ('Tour #' + (idx + 1)),
+      bookings: dashNumber(item.booking_count, 0),
+      revenue: dashNumber(item.revenue, 0),
+      percent: pct
+    };
+  });
+}
+
+function dashPickMaxBy(list, field) {
+  if (!Array.isArray(list) || !list.length) return null;
+  return list.reduce(function (best, item) {
+    if (!best) return item;
+    var a = dashNumber(best[field], 0);
+    var b = dashNumber(item[field], 0);
+    return b > a ? item : best;
+  }, null);
+}
+
+function dashNormalizeRevenueSeries(revenueResult) {
+  var raw = [];
+  if (revenueResult && Array.isArray(revenueResult.chart_result)) raw = revenueResult.chart_result;
+  else if (revenueResult && Array.isArray(revenueResult.chart_data)) raw = revenueResult.chart_data;
+  if (!raw.length) return [];
+
+  var series = raw.map(function (item, idx) {
+    var label = item.date || item.period || ('Mốc ' + (idx + 1));
+    return {
+      label: label,
+      revenue: dashNumber(item.net_revenue, dashNumber(item.revenue, 0))
+    };
+  });
+
+  series.sort(function (a, b) {
+    return String(a.label).localeCompare(String(b.label));
+  });
+
+  return series.slice(-7);
+}
+
+
+function dashRenderBookingCancelChart(container, bookings, cancelled) {
+  if (!container) return;
+  var b = Math.max(0, dashNumber(bookings, 0));
+  var c = Math.max(0, dashNumber(cancelled, 0));
+  var maxV = Math.max(b, c, 1);
+  var hb = Math.max(6, Math.round((b / maxV) * 180));
+  var hc = Math.max(6, Math.round((c / maxV) * 180));
+
+  container.innerHTML =
+    '<div class="dash-bc-item">' +
+    '<div class="dash-bc-track"><div class="dash-bc-fill booking" style="height:' + hb + 'px"></div></div>' +
+    '<div class="dash-bc-label">Bookings</div>' +
+    '<div class="dash-bc-value">' + b.toLocaleString('vi-VN') + '</div>' +
+    '</div>' +
+    '<div class="dash-bc-item">' +
+    '<div class="dash-bc-track"><div class="dash-bc-fill cancel" style="height:' + hc + 'px"></div></div>' +
+    '<div class="dash-bc-label">Đã huỷ</div>' +
+    '<div class="dash-bc-value">' + c.toLocaleString('vi-VN') + '</div>' +
+    '</div>';
+}
+
+function dashUpdatePeriodButtons() {
+  document.querySelectorAll('#dashPeriodSwitch .stats-period').forEach(function (btn) {
+    btn.classList.toggle('active', btn.getAttribute('data-period') === DASH_PERIOD);
+  });
+}
+
+function dashSetPeriod(period, btn) {
+  DASH_PERIOD = period;
+  if (btn) {
+    document.querySelectorAll('#dashPeriodSwitch .stats-period').forEach(function (b) { b.classList.remove('active'); });
+    btn.classList.add('active');
+  } else {
+    dashUpdatePeriodButtons();
+  }
+  dashLoadDashboard();
+}
+
+function dashTodayDateLabel(chartLabels) {
+  if (Array.isArray(chartLabels) && chartLabels.length) {
+    var raw = chartLabels[chartLabels.length - 1];
+    return dashFormatShortDateLabel(raw);
+  }
+  var now = new Date();
+  return now.getDate() + '/' + (now.getMonth() + 1);
+}
+
+function dashFormatAlertDate(rawDate) {
+  if (!rawDate) return '';
+  var txt = String(rawDate);
+  if (txt.indexOf('-') > -1) {
+    var parts = txt.split('-');
+    if (parts.length >= 3) return parts[2].slice(0, 2) + '/' + parts[1];
+  }
+  return dashFormatShortDateLabel(txt);
+}
+
+function dashFindNegativeRevenueDay(revenueResult) {
+  if (!revenueResult) return '';
+  var rows = [];
+  if (Array.isArray(revenueResult.chart_result)) rows = revenueResult.chart_result;
+  else if (Array.isArray(revenueResult.chart_data)) rows = revenueResult.chart_data;
+  for (var i = 0; i < rows.length; i++) {
+    var item = rows[i] || {};
+    var net = dashNumber(item.net_revenue, dashNumber(item.netRevenue, 0));
+    if (net < 0) return dashFormatAlertDate(item.date || item.period);
+  }
+  return '';
+}
+
+function dashRenderTodaySummary(overviewToday, revenueWeekResult, label) {
+  var box = document.getElementById('dashTodaySummaryBody');
+  var title = document.getElementById('dashTodayTitle');
+  if (!box) return;
+
+  var ov = overviewToday || {};
+  var cancelRate = dashNumber(ov.cancellation_rate, dashNumber(ov.cancel_rate, 0));
+  var bookings = dashNumber(ov.total_bookings, dashNumber(ov.bookings, 0));
+  var negativeDay = dashFindNegativeRevenueDay(revenueWeekResult);
+
+  if (title) title.textContent = 'Thông báo (' + label + ')';
+  var alertItems = [
+    {
+      show: cancelRate > 0,
+      active: cancelRate > 40,
+      color: cancelRate > 40 ? '#b42318' : '#ca8a04',
+      text: cancelRate > 40
+        ? '📉 Tỷ lệ huỷ cao (' + cancelRate.toLocaleString('vi-VN') + '%)'
+        : '📉 Tỷ lệ huỷ bình thường (' + cancelRate.toLocaleString('vi-VN') + '%)'
+    },
+    {
+      active: !!negativeDay,
+      text: negativeDay
+        ? '⚠️ Có ngày doanh thu âm (' + negativeDay + ')'
+        : '✅ Không có ngày doanh thu âm'
+    },
+    {
+      active: bookings === 0,
+      text: bookings === 0
+        ? '⚠️ Không có booking hôm nay'
+        : '✅ Có ' + bookings.toLocaleString('vi-VN') + ' booking hôm nay'
+    }
+  ];
+
+  box.innerHTML = '<ul>' + alertItems.filter(function (item) {
+    return item.show !== false;
+  }).map(function (item) {
+    var color = item.color || (item.active ? '#b42318' : '#2d8a4e');
+    return '<li style="color:' + color + ';font-weight:700">' + item.text + '</li>';
+  }).join('') + '</ul>';
+}
+
+async function dashLoadDashboard() {
+  var topBody = document.getElementById('dashTopToursBody');
+  var topBookedBody = document.getElementById('dashTopBookedBody');
+  var revenueChartEl = document.getElementById('dashRevenueLineChart');
+  var revenueChartCard = document.getElementById('dashRevenueChartCard');
+  var todayCard = document.getElementById('dashTodayInsightsCard');
+  var row2 = document.getElementById('dashRow2');
+  if (!topBody || !topBookedBody || !revenueChartEl || !revenueChartCard || !todayCard || !row2) return;
+
+  dashUpdatePeriodButtons();
+
+  if (DASH_LOADING) return;
+  DASH_LOADING = true;
+
+  var kpiPeriod = document.getElementById('dashKpiPeriod');
+  var periodLabel = { today: 'Hôm nay', week: 'Tuần này', month: 'Tháng này', year: 'Năm nay' }[DASH_PERIOD] || 'Hôm nay';
+  if (kpiPeriod) kpiPeriod.textContent = periodLabel;
+
+  var topMetaDescEl = document.getElementById('dashRevenueMeta');
+  var revenueMetaEl = document.getElementById('dashRevenueChartMeta');
+  revenueChartCard.style.display = 'block';
+  todayCard.style.display = 'block';
+  row2.classList.remove('single');
+
+  if (topMetaDescEl) topMetaDescEl.textContent = 'Đang tải dữ liệu...';
+  if (revenueMetaEl) revenueMetaEl.textContent = 'Đang tải dữ liệu biểu đồ...';
+  topBody.innerHTML =
+    '<div class="dash-top-tour-name">Đang tải...</div>' +
+    '<div class="dash-top-tour-stat">💰 0</div>' +
+    '<div class="dash-top-tour-stat">📦 0 booking</div>' +
+    '<div class="dash-top-tour-stat">📊 0%</div>';
+  topBookedBody.innerHTML =
+    '<div class="dash-top-tour-name">Đang tải...</div>' +
+    '<div class="dash-top-tour-stat">💰 0</div>' +
+    '<div class="dash-top-tour-stat">📦 0 booking</div>' +
+    '<div class="dash-top-tour-stat">📊 0%</div>';
+
+  try {
+    var responses = await Promise.all([
+      apiGetStatsOverview(DASH_PERIOD),
+      apiGetTopTours('week', DASH_TOP_LIMIT),
+      apiGetStatsOverview('today'),
+      apiGetStatsRevenue('week')
+    ]);
+
+    var overview = dashGetResult(responses[0]) || {};
+    var topTours = dashNormalizeTopTours(dashGetResult(responses[1]));
+    var overviewToday = dashGetResult(responses[2]) || {};
+    var revenueWeek = dashGetResult(responses[3]) || {};
+
+    const chartRaw = overview.chart || {
+      labels: [],
+      revenues: [],
+      bookings: [],
+      cancelled: []
+    };
+
+    const chart = dashNormalizeChart(chartRaw);
+
+    var totalRevenue = dashNumber(overview.total_revenue, 0);
+    var totalBookings = dashNumber(overview.total_bookings, 0);
+    var cancelledBookings = dashNumber(overview.cancelled_bookings, 0);
+    var cancellationRate = dashNumber(overview.cancellation_rate, 0);
+    var newUsers = dashNumber(overview.new_users, 0);
+    var cmp = overview.comparison_with_previous || {};
+    var bookingsGrowth = dashNumber(cmp.bookings_growth, 0);
+    var usersGrowth = dashNumber(cmp.users_growth, 0);
+    var cancellationRateGrowth = dashNumber(cmp.cancellation_rate_growth, 0);
+
+    var todayRevenue = dashNumber(overviewToday.revenue, dashNumber(overviewToday.total_revenue, dashNumber(overviewToday.net_revenue, 0)));
+    var todayBookings = dashNumber(overviewToday.bookings, dashNumber(overviewToday.total_bookings, 0));
+    var todayCancelRate = dashNumber(overviewToday.cancel_rate, dashNumber(overviewToday.cancellation_rate, 0));
+
+    var el = function (id) { return document.getElementById(id); };
+    if (el('dashKpiRevenueToday')) el('dashKpiRevenueToday').textContent = dashFormatCompactMoney(todayRevenue);
+    if (el('dashKpiBookingsToday')) el('dashKpiBookingsToday').textContent = todayBookings.toLocaleString('vi-VN');
+    if (el('dashKpiCancelledToday')) el('dashKpiCancelledToday').textContent = todayCancelRate.toLocaleString('vi-VN') + '%';
+
+    if (el('dashKpiRevenue')) el('dashKpiRevenue').textContent = dashFormatMoney(totalRevenue);
+    if (el('dashKpiBookings')) el('dashKpiBookings').textContent = totalBookings.toLocaleString('vi-VN');
+    if (el('dashKpiUsers')) el('dashKpiUsers').textContent = newUsers.toLocaleString('vi-VN');
+    if (el('dashKpiCancelRate')) {
+      var cancelEl = el('dashKpiCancelRate');
+      cancelEl.textContent = cancellationRate.toLocaleString('vi-VN') + '%';
+      var cancelCard = cancelEl.closest('.stats-kpi-card');
+      if (cancellationRate >= 30) {
+        cancelEl.style.color = '#dc2626';
+        if (cancelCard) cancelCard.style.boxShadow = '0 0 0 2px rgba(220,38,38,.2), 0 1px 8px rgba(0,0,0,.05)';
+      } else if (cancellationRate < 10) {
+        cancelEl.style.color = '#2d8a4e';
+        if (cancelCard) cancelCard.style.boxShadow = '0 0 0 2px rgba(45,138,78,.18), 0 1px 8px rgba(0,0,0,.05)';
+      } else {
+        cancelEl.style.color = '#d97706';
+        if (cancelCard) cancelCard.style.boxShadow = '0 0 0 2px rgba(217,119,6,.18), 0 1px 8px rgba(0,0,0,.05)';
+      }
+    }
+    if (el('dashKpiCancelledBookings')) el('dashKpiCancelledBookings').textContent = cancelledBookings.toLocaleString('vi-VN');
+    dashSetTrendBadge('dashKpiBookingsTrend', bookingsGrowth);
+    dashSetTrendBadge('dashKpiUsersTrend', usersGrowth);
+    dashSetTrendBadge('dashKpiCancelRateTrend', cancellationRateGrowth);
+
+    dashRenderTodaySummary(overviewToday, revenueWeek, dashTodayDateLabel(chart.labels));
+
+    var miniRevenueSeries = dashNormalizeRevenueSeries(revenueWeek);
+    var miniLabels = miniRevenueSeries.map(function (item) { return item.label; });
+    var miniValues = miniRevenueSeries.map(function (item) { return item.revenue; });
+    renderRevenueChart(miniLabels, miniValues);
+
+    if (revenueMetaEl) {
+      if (miniRevenueSeries.length) {
+        var first = dashFormatShortDateLabel(miniRevenueSeries[0].label);
+        var last = dashFormatShortDateLabel(miniRevenueSeries[miniRevenueSeries.length - 1].label);
+        revenueMetaEl.textContent = '7 ngày gần nhất: ' + first + ' → ' + last;
+      } else {
+        revenueMetaEl.textContent = 'Chưa có dữ liệu 7 ngày gần nhất';
+      }
+    }
+
+    if (topMetaDescEl) {
+      topMetaDescEl.textContent = DASH_PERIOD === 'today'
+        ? 'Chu kỳ hiển thị KPI: ' + periodLabel + ' | Top tour: tuần này'
+        : 'Chu kỳ hiển thị: ' + periodLabel;
+    }
+
+    var topByRevenue = dashPickMaxBy(topTours, 'revenue');
+    var topByBookings = dashPickMaxBy(topTours, 'bookings');
+
+    if (!topByRevenue) {
+      topBody.innerHTML =
+        '<div class="dash-top-tour-name">Chưa có dữ liệu</div>' +
+        '<div class="dash-top-tour-stat">💰 0</div>' +
+        '<div class="dash-top-tour-stat">📦 0 booking</div>' +
+        '<div class="dash-top-tour-stat">📊 0%</div>';
+    } else {
+      var t = topByRevenue;
+      topBody.innerHTML =
+        '<div class="dash-top-tour-name">' + t.name + '</div>' +
+        '<div class="dash-top-tour-stat">💰 ' + dashFormatCompactMoney(t.revenue) + '</div>' +
+        '<div class="dash-top-tour-stat">📦 ' + t.bookings.toLocaleString('vi-VN') + ' booking</div>' +
+        '<div class="dash-top-tour-stat">📊 ' + dashNumber(t.percent, 0).toLocaleString('vi-VN') + '%</div>';
+    }
+
+    if (!topByBookings) {
+      topBookedBody.innerHTML =
+        '<div class="dash-top-tour-name">Chưa có dữ liệu</div>' +
+        '<div class="dash-top-tour-stat">💰 0</div>' +
+        '<div class="dash-top-tour-stat">📦 0 booking</div>' +
+        '<div class="dash-top-tour-stat">📊 0%</div>';
+    } else {
+      var tb = topByBookings;
+      topBookedBody.innerHTML =
+        '<div class="dash-top-tour-name">' + tb.name + '</div>' +
+        '<div class="dash-top-tour-stat">💰 ' + dashFormatCompactMoney(tb.revenue) + '</div>' +
+        '<div class="dash-top-tour-stat">📦 ' + tb.bookings.toLocaleString('vi-VN') + ' booking</div>' +
+        '<div class="dash-top-tour-stat">📊 ' + dashNumber(tb.percent, 0).toLocaleString('vi-VN') + '%</div>';
+    }
+
+    var topMeta = document.getElementById('dashTopToursMeta');
+    if (topMeta) topMeta.textContent = 'Tuần này';
+    var topBookedMeta = document.getElementById('dashTopBookedMeta');
+    if (topBookedMeta) topBookedMeta.textContent = 'Tuần này';
+  } catch (e) {
+    if (topMetaDescEl) topMetaDescEl.textContent = 'Không tải được dữ liệu từ API overview.';
+    if (revenueMetaEl) revenueMetaEl.textContent = 'Không tải được biểu đồ doanh thu.';
+    dashRenderTodaySummary({
+      total_revenue: 0,
+      total_bookings: 0,
+      cancelled_bookings: 0,
+      cancellation_rate: 0,
+      comparison_with_previous: { revenue_growth: 0, bookings_growth: 0, cancellation_rate_growth: 0 }
+    }, {}, dashTodayDateLabel([]));
+    topBody.innerHTML =
+      '<div class="dash-top-tour-name">Không tải được top tour</div>' +
+      '<div class="dash-top-tour-stat">💰 0</div>' +
+      '<div class="dash-top-tour-stat">📦 0 booking</div>' +
+      '<div class="dash-top-tour-stat">📊 0%</div>';
+    topBookedBody.innerHTML =
+      '<div class="dash-top-tour-name">Không tải được top tour</div>' +
+      '<div class="dash-top-tour-stat">💰 0</div>' +
+      '<div class="dash-top-tour-stat">📦 0 booking</div>' +
+      '<div class="dash-top-tour-stat">📊 0%</div>';
+  } finally {
+    DASH_LOADING = false;
+  }
+}
+
+function adminUpdateDashStats() {
+  dashLoadDashboard();
+}
+
+// ============================================================
+// CATEGORIES – Quản lý Danh mục
+// ============================================================
+var CAT_KEY = 'vt_admin_categories';
+var CAT_PAGE = 1;
+var CAT_API_CACHE = [];
+var CAT_PER = 10;
+var CAT_SAVING = false;
+var CAT_TOGGLE_CONFIRM_RESOLVE = null;
+
+var DEFAULT_CATS = [
+  { id: 'c1', name: 'Du lịch biển', desc: 'Các tour tham quan, nghỉ dưỡng tại biển', active: true },
+  { id: 'c2', name: 'Trekking & Núi', desc: 'Leo núi, trekking rừng và núi cao', active: true },
+  { id: 'c3', name: 'Văn hóa & Lịch sử', desc: 'Khám phá di tích, văn hóa bản địa', active: true },
+  { id: 'c4', name: 'Ẩm thực', desc: 'Tour trải nghiệm ẩm thực địa phương', active: true },
+  { id: 'c5', name: 'Nghỉ dưỡng', desc: 'Resort, spa và thư giãn cao cấp', active: true },
+];
+
+function catGetAll() {
+  try { var r = localStorage.getItem(CAT_KEY); return r ? JSON.parse(r) : DEFAULT_CATS; } catch (e) { return DEFAULT_CATS; }
+}
+function catSaveAll(cats) { localStorage.setItem(CAT_KEY, JSON.stringify(cats)); }
+
+// Show/hide form
+function catShowForm(id) {
+  var card = document.getElementById('catFormCard');
+  card.style.display = 'flex';
+  document.getElementById('catEditId').value = id || '';
+  document.getElementById('catFormTitle').textContent = id ? 'Chỉnh sửa danh mục' : 'Thêm danh mục mới';
+  var fileInput = document.getElementById('catThumbnail');
+  if (fileInput) fileInput.value = '';
+  if (id) {
+    var cat = CAT_API_CACHE.find(function (c) { return (c._id || c.id) === id; })
+      || catGetAll().find(function (c) { return c.id === id; });
+    if (cat) {
+      document.getElementById('catName').value = cat.name || '';
+      document.getElementById('catDesc').value = cat.description || cat.desc || '';
+    }
+  } else {
+    document.getElementById('catName').value = '';
+    document.getElementById('catDesc').value = '';
+  }
+}
+function catSetSaving(isSaving, phaseText) {
+  CAT_SAVING = !!isSaving;
+  var card = document.getElementById('catFormCard');
+  if (!card) return;
+
+  card.querySelectorAll('input, textarea, button').forEach(function (el) {
+    el.disabled = CAT_SAVING;
+  });
+
+  var saveBtn = document.getElementById('catSaveBtn');
+  if (saveBtn) {
+    if (!saveBtn.dataset.defaultText) saveBtn.dataset.defaultText = saveBtn.textContent;
+    saveBtn.textContent = CAT_SAVING ? 'Đang lưu...' : saveBtn.dataset.defaultText;
+  }
+
+  var loading = document.getElementById('catSaveLoading');
+  if (loading) {
+    loading.style.display = CAT_SAVING ? 'block' : 'none';
+    if (phaseText) loading.textContent = phaseText;
+  }
+}
+
+function catHideForm(force) {
+  if (CAT_SAVING && !force) return;
+  document.getElementById('catFormCard').style.display = 'none';
+}
+
+function catToggleConfirmOpen(text, title) {
+  var modal = document.getElementById('catToggleConfirmModal');
+  var textEl = document.getElementById('catToggleConfirmText');
+  var titleEl = document.getElementById('catToggleConfirmTitle');
+  if (!modal) return Promise.resolve(false);
+  if (titleEl) titleEl.textContent = title || 'Xác nhận thao tác';
+  if (textEl) textEl.textContent = text || 'Bạn có chắc muốn thay đổi trạng thái danh mục này?';
+  modal.style.display = 'flex';
+  return new Promise(function (resolve) {
+    CAT_TOGGLE_CONFIRM_RESOLVE = resolve;
+  });
+}
+
+function catToggleConfirmClose(accepted) {
+  var modal = document.getElementById('catToggleConfirmModal');
+  if (modal) modal.style.display = 'none';
+  if (CAT_TOGGLE_CONFIRM_RESOLVE) {
+    var resolve = CAT_TOGGLE_CONFIRM_RESOLVE;
+    CAT_TOGGLE_CONFIRM_RESOLVE = null;
+    resolve(!!accepted);
+  }
+}
+
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape') {
+    var globalConfirmModal = document.getElementById('adminGlobalConfirmModal');
+    if (globalConfirmModal && globalConfirmModal.style.display !== 'none') {
+      adminGlobalConfirmClose(false);
+      return;
+    }
+    var couponConfirmModal = document.getElementById('couponConfirmModal');
+    if (couponConfirmModal && couponConfirmModal.style.display !== 'none') {
+      adminCouponConfirmClose(false);
+      return;
+    }
+    var couponModal = document.getElementById('couponCreateModal');
+    if (couponModal && couponModal.style.display !== 'none') {
+      adminCouponHideCreateModal();
+      return;
+    }
+    var couponEditModal = document.getElementById('couponEditModal');
+    if (couponEditModal && couponEditModal.style.display !== 'none') {
+      adminCouponHideEditModal();
+      return;
+    }
+    var toggleModal = document.getElementById('catToggleConfirmModal');
+    if (toggleModal && toggleModal.style.display !== 'none') {
+      catToggleConfirmClose(false);
+      return;
+    }
+    var card = document.getElementById('catFormCard');
+    if (card && card.style.display !== 'none') catHideForm();
+  }
+});
+
+// Save – POST /api/categories hoặc PUT /api/categories/:id
+async function catSave() {
+  if (CAT_SAVING) return;
+  var name = (document.getElementById('catName').value || '').trim();
+  var desc = (document.getElementById('catDesc').value || '').trim();
+  var id = document.getElementById('catEditId').value;
+  var file = document.getElementById('catThumbnail').files[0];
+
+  if (!name) { showToast('⚠️ Vui lòng nhập tên danh mục'); return; }
+
+  catSetSaving(true, '⏳ Đang lưu thông tin danh mục...');
+
+  // Update text bằng JSON, ảnh gọi route riêng /categories/:id/image
+  try {
+    var payload = { name: name };
+    if (desc) payload.description = desc;
+
+    var res;
+    if (id) {
+      res = await apiAdminUpdateCategory(id, payload);
+      if (res && res.ok && file) {
+        catSetSaving(true, '⏳ Đang tải ảnh thumbnail...');
+        var imageRes = await apiAdminUpdateCategoryImage(id, file);
+        if (!imageRes || !imageRes.ok) {
+          var imageMsg = (imageRes && imageRes.data && (imageRes.data.message || imageRes.data.error))
+            ? (imageRes.data.message || imageRes.data.error)
+            : 'Cập nhật ảnh danh mục thất bại';
+          showToast('❌ ' + imageMsg);
+          return;
+        }
+      }
+    } else {
+      res = await apiAdminCreateCategory(payload);
+      if (res && res.ok && file) {
+        catSetSaving(true, '⏳ Đang tải ảnh thumbnail...');
+        var created = (res.data && res.data.result) ? res.data.result : {};
+        var createdCat = created.category || created;
+        var createdId = createdCat._id || createdCat.id;
+        if (createdId) {
+          var createdImageRes = await apiAdminUpdateCategoryImage(createdId, file);
+          if (!createdImageRes || !createdImageRes.ok) {
+            var createdImageMsg = (createdImageRes && createdImageRes.data && (createdImageRes.data.message || createdImageRes.data.error))
+              ? (createdImageRes.data.message || createdImageRes.data.error)
+              : 'Cập nhật ảnh danh mục thất bại';
+            showToast('❌ ' + createdImageMsg);
+            return;
+          }
+        }
+      }
+    }
+    if (res && res.ok) {
+      showToast('✅ Đã lưu danh mục!');
+      catHideForm(true);
+      catRender();
+      return;
+    }
+
+    var msg = (res && res.data && (res.data.message || res.data.error))
+      ? (res.data.message || res.data.error)
+      : 'Lưu danh mục thất bại';
+    showToast('❌ ' + msg);
+    return;
+  } catch (e) {
+    showToast('❌ Không thể kết nối server');
+    return;
+  } finally {
+    catSetSaving(false);
+  }
+}
+
+// Delete – DELETE /api/categories/:id
+async function catDelete(id) {
+  var apiCat = CAT_API_CACHE.find(function (c) { return (c._id || c.id) === id; });
+  var localCat = catGetAll().find(function (c) { return (c._id || c.id) === id || c.id === id; });
+  var cat = apiCat || localCat;
+
+  var confirmed = await catToggleConfirmOpen(
+    'Bạn có chắc muốn xóa danh mục "' + (cat ? (cat.name || id) : id) + '"? Hành động này không thể hoàn tác.',
+    'Xác nhận xóa danh mục'
+  );
+  if (!confirmed) return;
+
+  try {
+    var res = await apiAdminDeleteCategory(id);
+    if (res && res.ok) { showToast('Đã xóa danh mục'); catRender(); return; }
+    var errMsg = (res && res.data && (res.data.message || res.data.error)) ? (res.data.message || res.data.error) : '';
+    if (res && res.status === 400 && errMsg === 'Category has tours, cannot be deleted') {
+      showToast('❌ Không thể xóa danh mục đang có tour hoạt động');
+      return;
+    }
+    showToast('❌ ' + (errMsg || 'Không thể xóa danh mục'));
+    return;
+  } catch (e) {
+    showToast('❌ Không thể kết nối server');
+    return;
+  }
+}
+
+// Toggle active
+async function catToggle(id, inputEl) {
+  var cats = catGetAll();
+  var apiCat = CAT_API_CACHE.find(function (c) { return (c._id || c.id) === id; });
+  var localIdx = cats.findIndex(function (c) { return (c._id || c.id) === id || c.id === id; });
+
+  var currentActive = false;
+  if (apiCat) {
+    currentActive = typeof apiCat.is_active === 'boolean' ? apiCat.is_active : (apiCat.active !== false);
+  } else if (localIdx >= 0) {
+    var localCat = cats[localIdx];
+    currentActive = typeof localCat.is_active === 'boolean' ? localCat.is_active : (localCat.active !== false);
+  }
+
+  var nextActive = !currentActive;
+
+  var confirmText = nextActive
+    ? 'Bạn có chắc muốn BẬT trạng thái danh mục này?'
+    : 'Bạn có chắc muốn TẮT trạng thái danh mục này?';
+  var confirmed = await catToggleConfirmOpen(confirmText, 'Xác nhận thay đổi trạng thái');
+  if (!confirmed) {
+    if (inputEl) inputEl.checked = currentActive;
+    return;
+  }
+
+  try {
+    var res = await apiAdminToggleCategory(id, nextActive);
+    if (res && res.ok) {
+      catRender();
+      return;
+    }
+
+    if (inputEl) inputEl.checked = currentActive;
+    var errMsg = (res && res.data && (res.data.message || res.data.error)) ? (res.data.message || res.data.error) : '';
+    if (res && res.status === 400 && errMsg === 'Category has active tours, cannot be disabled') {
+      showToast('❌ Không thể ẩn danh mục đang có tour hoạt động');
+    } else {
+      showToast('❌ ' + (errMsg || 'Không thể cập nhật trạng thái danh mục'));
+    }
+    return;
+  } catch (e) { }
+
+  if (inputEl) inputEl.checked = currentActive;
+  showToast('❌ Không thể cập nhật trạng thái danh mục');
+}
+
+// Render
+async function catRender() {
+  var tbody = document.getElementById('catTableBody');
+  var footer = document.getElementById('catTableFooter');
+  if (!tbody) return;
+
+  var cats = [];
+
+  // Thử API
+  try {
+    var res = await apiAdminGetCategories();
+    if (res && res.ok && res.data.result) {
+      cats = res.data.result.categories || res.data.result || [];
+      CAT_API_CACHE = cats;
+    }
+  } catch (e) { }
+
+  // Fallback local
+  if (!cats.length) cats = catGetAll();
+
+  var q = (document.getElementById('catSearch')?.value || '').toLowerCase();
+  if (q) cats = cats.filter(function (c) { return c.name.toLowerCase().includes(q); });
+
+  var total = cats.length;
+  var start = (CAT_PAGE - 1) * CAT_PER;
+  var paged = cats.slice(start, start + CAT_PER);
+
+  if (!paged.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#aaa;padding:32px">Chưa có danh mục nào</td></tr>';
+    if (footer) footer.innerHTML = '';
+    return;
+  }
+
+  tbody.innerHTML = paged.map(function (c, i) {
+    var id = c._id || c.id;
+    var thumb = c.thumbnail || '../images/vietnam.png';
+    var active = typeof c.is_active === 'boolean'
+      ? c.is_active
+      : (c.active !== false);
+    return '<tr>' +
+      '<td style="color:#aaa;font-size:0.75rem">' + (start + i + 1) + '</td>' +
+      '<td><strong style="font-size:0.83rem">' + (c.name || '—') + '</strong></td>' +
+      '<td><img src="' + thumb + '" alt="thumbnail" style="width:72px;height:48px;object-fit:cover;border-radius:8px;border:1px solid #eee" onerror="this.onerror=null;this.src=\'../images/vietnam.png\'" /></td>' +
+      '<td style="font-size:0.78rem;color:#888;max-width:280px">' + (c.description || c.desc || '—') + '</td>' +
+      '<td><div style="display:flex;align-items:center;gap:8px">' +
+      '<label class="afp-toggle" style="transform:scale(.88);transform-origin:left center">' +
+      '<input type="checkbox" ' + (active ? 'checked' : '') + ' onchange="catToggle(\'' + id + '\', this)">' +
+      '<span class="afp-toggle-slider"></span>' +
+      '</label>' +
+      '<span style="font-size:0.78rem;font-weight:600;color:' + (active ? '#2d8a4e' : '#888') + '">' + (active ? 'Đang hoạt động' : 'Ngừng hoạt động') + '</span>' +
+      '</div></td>' +
+      '<td><div style="display:flex;gap:6px">' +
+      '<button class="admin-act-btn" data-id="' + id + '" onclick="catShowForm(this.dataset.id)">Sửa</button>' +
+      '<button class="admin-act-btn admin-act-btn-red" data-id="' + id + '" onclick="catDelete(this.dataset.id)">Xóa</button>' +
+      '</div></td>' +
+      '</tr>';
+  }).join('');
+
+  // Footer
+  var totalPages = Math.max(1, Math.ceil(total / CAT_PER));
+  var pages = '';
+  for (var p = 1; p <= totalPages; p++) {
+    pages += '<button class="admin-page-btn' + (p === CAT_PAGE ? ' active' : '') + '" onclick="CAT_PAGE=' + p + ';catRender()">' + p + '</button>';
+  }
+  if (footer) footer.innerHTML =
+    '<span style="font-size:0.75rem;color:#aaa">Hiển thị ' + (total ? (start + 1) : 0) + ' - ' + (total ? Math.min(start + CAT_PER, total) : 0) + ' / ' + total + ' danh mục</span>' +
+    '<div class="admin-pagination">' +
+    '<button class="admin-page-btn text" onclick="if(CAT_PAGE>1){CAT_PAGE--;catRender()}">Trước</button>' +
+    pages +
+    '<button class="admin-page-btn text" onclick="if(CAT_PAGE<' + totalPages + '){CAT_PAGE++;catRender()}">Sau</button>' +
+    '</div>';
+}
+
+// Load khi switch tab
+var _origSwitchTab3 = switchTab;
+switchTab = function (name) {
+  _origSwitchTab3(name);
+  if (name === 'categories') catRender();
+};
+
+// ============================================================
+// BOOKINGS MANAGEMENT (Admin)
+// ============================================================
+var ADMIN_BK_PAGE = 1;
+var ADMIN_BK_PER = 10;
+
+function adminCanCancelBookings() {
+  return adminGetCurrentUserRole() !== 2;
+}
+
+function adminBkFormatDate(dateInput) {
+  if (!dateInput) return '—';
+  var d = new Date(dateInput);
+  if (isNaN(d.getTime())) {
+    return String(dateInput).slice(0, 10) || '—';
+  }
+  var dd = String(d.getDate()).padStart(2, '0');
+  var mm = String(d.getMonth() + 1).padStart(2, '0');
+  var yyyy = d.getFullYear();
+  return dd + '/' + mm + '/' + yyyy;
+}
+
+function adminBkFormatMoney(value) {
+  var n = Number(value);
+  if (!isFinite(n) || n < 0) return '—';
+  return Math.round(n).toLocaleString('vi-VN') + 'đ';
+}
+
+function adminBkGetTourName(b) {
+  return (b.tour_snapshot && b.tour_snapshot.tour_name) ||
+    b.tourName ||
+    b.tour ||
+    (b.schedule && b.schedule.tour && b.schedule.tour.name) ||
+    '—';
+}
+
+function adminBkGetDepartureDate(b) {
+  var rawDate = (b.tour_snapshot && b.tour_snapshot.departure_date) ||
+    b.date ||
+    (b.schedule && b.schedule.departure_date);
+  return adminBkFormatDate(rawDate);
+}
+
+function adminBkGetCalculatedTotal(b) {
+  if (b && b.final_price !== undefined && b.final_price !== null) {
+    return adminBkFormatMoney(b.final_price);
+  }
+
+  var snapshot = b.tour_snapshot || {};
+  var pax = b.passengers || {};
+
+  var adults = Number(pax.adults || 0);
+  var children = Number(pax.children || 0);
+  var babies = Number(pax.babies || 0);
+
+  var adultPrice = Number(snapshot.price_adult || 0);
+  var childPrice = Number(snapshot.price_child || 0);
+  var babyPrice = Number(snapshot.price_baby || 0);
+
+  var computedTotal = adultPrice * adults + childPrice * children + babyPrice * babies;
+  if (isFinite(computedTotal) && computedTotal > 0) {
+    return adminBkFormatMoney(computedTotal);
+  }
+
+  var fallback = b.total_price || b.total_amount || b.total || b.price;
+  return adminBkFormatMoney(fallback);
+}
+
+function adminBkFormatRawMoney(value) {
+  var n = Number(value);
+  if (!isFinite(n)) return 0;
+  return Math.round(n);
+}
+
+function adminBkNormalizeBookingStatus(status) {
+  if (status === 0 || status === '0' || status === 'upcoming') return 0;
+  if (status === 1 || status === '1' || status === 'confirmed') return 1;
+  if (status === 2 || status === '2' || status === 'done' || status === 'completed') return 2;
+  if (status === 3 || status === '3' || status === 'cancelled') return 3;
+  return 0;
+}
+
+function adminBkNormalizePaymentStatus(status) {
+  var raw = String(status === undefined || status === null ? '' : status).trim().toLowerCase();
+  if (status === 1 || status === '1' || raw === 'success' || raw === 'paid') return 1;
+  if (status === 3 || status === '3' || raw === 'refunded' || raw === 'refund' || raw === 'done_refund') return 3;
+  if (status === 4 || status === '4' || raw === 'refunded_pending' || raw === 'refund_pending' || raw === 'pending_refund' || raw === 'awaiting_refund') return 4;
+  return null;
+}
+
+function adminBkGetPaymentStatus(booking) {
+  var payment = booking && booking.payment ? booking.payment : null;
+  var candidates = [
+    payment && payment.status,
+    payment && payment.status_code,
+    payment && payment.statusCode,
+    payment && payment.status_name,
+    payment && payment.statusName,
+    payment && payment.state,
+    payment && payment.refund_status,
+    payment && payment.refundStatus,
+    booking && booking.payment_status,
+    booking && booking.paymentStatus,
+    booking && booking.payment_state,
+    booking && booking.paymentState,
+    booking && booking.status_payment,
+    booking && booking.statusPayment,
+    booking && booking.refund_status,
+    booking && booking.refundStatus
+  ];
+
+  for (var i = 0; i < candidates.length; i++) {
+    if (candidates[i] !== undefined && candidates[i] !== null && candidates[i] !== '') {
+      var normalized = adminBkNormalizePaymentStatus(candidates[i]);
+      if (normalized !== null) return normalized;
+    }
+  }
+
+  return null;
+}
+
+var ADMIN_BK_BOOKING_OVERRIDES = {};
+
+function adminBkBookingKey(booking) {
+  if (!booking) return '';
+  return String(booking._id || booking.id || booking.booking_id || booking.bookingId || booking.code || booking.booking_code || '').trim();
+}
+
+function adminBkRememberBooking(booking) {
+  var key = adminBkBookingKey(booking);
+  if (!key) return;
+  ADMIN_BK_BOOKING_OVERRIDES[key] = booking;
+}
+
+function adminBkMergeBookingOverrides(bookings) {
+  return (bookings || []).map(function (booking) {
+    var key = adminBkBookingKey(booking);
+    if (key && ADMIN_BK_BOOKING_OVERRIDES[key]) {
+      return Object.assign({}, booking, ADMIN_BK_BOOKING_OVERRIDES[key]);
+    }
+    return booking;
+  });
+}
+
+function adminBkGetStatusText(status) {
+  var normalized = adminBkNormalizeBookingStatus(status);
+  if (normalized === 1) return 'Đã xác nhận';
+  if (normalized === 2) return 'Hoàn thành';
+  if (normalized === 3) return 'Đã hủy';
+  return 'Chờ thanh toán';
+}
+
+function adminBkGetPaymentMethodText(b) {
+  var payment = b && b.payment ? b.payment : null;
+  var provider = payment && payment.provider !== undefined && payment.provider !== null
+    ? payment.provider
+    : (b && (b.payment_method || b.paymentMethod || b.payment_type || b.payment_type_name));
+
+  if (provider === 0 || provider === '0' || provider === 'momo') return 'MoMo';
+  if (provider === 1 || provider === '1' || provider === 'vnpay') return 'VNPay';
+  if (provider === 2 || provider === '2') return 'Chuyển khoản';
+  return provider === undefined || provider === null || provider === '' ? '—' : String(provider);
+}
+
+function adminBkGetPassengerTotal(b) {
+  var pax = (b && b.passengers) || {};
+  var adults = Number(pax.adults || 0);
+  var children = Number(pax.children || 0);
+  var babies = Number(pax.babies || 0);
+  return adults + children + babies;
+}
+
+function adminBkGetPriceDetailRows(b) {
+  var snapshot = (b && b.tour_snapshot) || {};
+  var pax = (b && b.passengers) || {};
+  var priceDetail = (b && b.price_detail) || {};
+
+  var adultCount = Number(priceDetail.adult_count !== undefined ? priceDetail.adult_count : (pax.adults || 0));
+  var childCount = Number(priceDetail.child_count !== undefined ? priceDetail.child_count : (pax.children || 0));
+  var babyCount = Number(priceDetail.baby_count !== undefined ? priceDetail.baby_count : (pax.babies || 0));
+
+  var adultPrice = Number(snapshot.price_adult || 0);
+  var childPrice = Number(snapshot.price_child || 0);
+  var babyPrice = Number(snapshot.price_baby || 0);
+
+  var adultTotal = priceDetail.adult_total !== undefined ? Number(priceDetail.adult_total) : adultPrice * adultCount;
+  var childTotal = priceDetail.child_total !== undefined ? Number(priceDetail.child_total) : childPrice * childCount;
+  var babyTotal = priceDetail.baby_total !== undefined ? Number(priceDetail.baby_total) : babyPrice * babyCount;
+  var discount = Number(priceDetail.discount_amount || 0);
+  var finalPrice = b && b.final_price !== undefined && b.final_price !== null ? Number(b.final_price) : (b.total_price || 0);
+
+  return {
+    adultCount: adultCount,
+    childCount: childCount,
+    babyCount: babyCount,
+    adultPrice: adultPrice,
+    childPrice: childPrice,
+    babyPrice: babyPrice,
+    adultTotal: adultTotal,
+    childTotal: childTotal,
+    babyTotal: babyTotal,
+    discount: discount,
+    couponCode: priceDetail.coupon_code || b.coupon_code || '—',
+    finalPrice: finalPrice,
+    subtotal: adultTotal + childTotal + babyTotal
+  };
+}
+
+function adminBkExtractStatusErrorMessage(res, fallback) {
+  var defaultMsg = fallback || 'Không thể cập nhật trạng thái đơn hàng';
+  if (!res || !res.data) return defaultMsg;
+  var data = res.data || {};
+  if (data.errors) {
+    var first = Array.isArray(data.errors) ? data.errors[0] : Object.values(data.errors)[0];
+    if (Array.isArray(first) && first.length) {
+      return adminBkTranslateStatusError(first[0].msg || first[0].message || first[0].errorMessage || first[0]);
+    }
+    if (first && (first.msg || first.message || first.errorMessage)) {
+      return adminBkTranslateStatusError(first.msg || first.message || first.errorMessage);
+    }
+    if (typeof first === 'string') return adminBkTranslateStatusError(first);
+  }
+
+  return adminBkTranslateStatusError(data.message || data.error || defaultMsg, defaultMsg);
+}
+
+function adminBkTranslateStatusError(msg, fallback) {
+  var raw = String(msg || '').trim();
+  var defaultMsg = fallback || 'Không thể cập nhật trạng thái đơn hàng';
+  if (!raw) return defaultMsg;
+
+  var map = {
+    TOUR_NOT_FINISHED_YET: 'Tour chưa kết thúc, không thể đánh dấu hoàn thành.',
+    CANNOT_UPDATE_CANCELLED_BOOKING: 'Không thể cập nhật booking đã hủy.',
+    CANCELLED_REASON_IS_REQUIRED: 'Vui lòng nhập lý do hủy đơn hàng.',
+    BOOKING_NOT_FOUND: 'Không tìm thấy booking.',
+    BOOKING_NOT_CANCELLED: 'Chỉ có thể xác nhận hoàn tiền khi booking đã hủy.',
+    PAYMENT_NOT_FOUND_OR_INVALID: 'Không tìm thấy giao dịch hợp lệ để xác nhận hoàn tiền.',
+    REFUND_CONFIRM_FAILED: 'Không thể xác nhận hoàn tiền.',
+    BOOKING_ALREADY_CANCELLED: 'Booking này đã bị hủy rồi.',
+    BOOKING_ALREADY_COMPLETED: 'Booking này đã hoàn thành rồi.',
+    CANNOT_COMPLETE_BOOKING: 'Không thể đánh dấu hoàn thành booking này.',
+    CANNOT_CANCEL_BOOKING: 'Không thể hủy booking này.',
+    INVALID_BOOKING_STATUS: 'Trạng thái booking không hợp lệ.',
+    BOOKING_STATUS_INVALID: 'Trạng thái booking không hợp lệ.'
+  };
+  if (map[raw]) return map[raw];
+
+  var lower = raw.toLowerCase();
+  if (lower.includes('tour not finished yet')) return 'Tour chưa kết thúc, không thể đánh dấu hoàn thành.';
+  if (lower.includes('return date') || lower.includes('ngày về')) return 'Tour chưa kết thúc, không thể đánh dấu hoàn thành.';
+  if (lower.includes('not finished') || lower.includes('chưa kết thúc')) return 'Tour chưa kết thúc, không thể đánh dấu hoàn thành.';
+  if (lower.includes('cannot update cancelled booking')) return 'Không thể cập nhật booking đã hủy.';
+  if (lower.includes('cancelled booking') || lower.includes('booking was cancelled') || lower.includes('đã hủy')) return 'Không thể cập nhật booking đã hủy.';
+  if (lower.includes('cancelled reason is required') || lower.includes('cancel reason is required') || lower.includes('lý do hủy')) return 'Vui lòng nhập lý do hủy đơn hàng.';
+  if (lower.includes('booking not found')) return 'Không tìm thấy booking.';
+  if (lower.includes('booking not cancelled')) return 'Chỉ có thể xác nhận hoàn tiền khi booking đã hủy.';
+  if (lower.includes('payment not found') || lower.includes('payment invalid')) return 'Không tìm thấy giao dịch hợp lệ để xác nhận hoàn tiền.';
+  if (lower.includes('refund')) return 'Không thể xác nhận hoàn tiền.';
+  if (lower.includes('already cancelled')) return 'Booking này đã bị hủy rồi.';
+  if (lower.includes('already completed')) return 'Booking này đã hoàn thành rồi.';
+  if (lower.includes('complete') && lower.includes('cannot')) return 'Không thể đánh dấu hoàn thành booking này.';
+  if (lower.includes('cancel') && lower.includes('cannot')) return 'Không thể hủy booking này.';
+  if (lower.includes('invalid status') || lower.includes('status invalid')) return 'Trạng thái booking không hợp lệ.';
+
+  return defaultMsg;
+}
+
+var ADMIN_BK_CANCEL_MODAL_RESOLVE = null;
+
+function adminBkEnsureCancelModal() {
+  var modal = document.getElementById('adminBkCancelModal');
+  if (modal) return modal;
+
+  modal = document.createElement('div');
+  modal.id = 'adminBkCancelModal';
+  modal.style.cssText = 'position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:100001;background:rgba(0,0,0,.5);padding:16px;';
+  modal.innerHTML =
+    '<div style="width:min(520px,100%);background:#fff;border-radius:14px;box-shadow:0 20px 50px rgba(0,0,0,.24);overflow:hidden">' +
+    '<div style="padding:14px 16px;border-bottom:1px solid #eef2f7;font-size:1rem;font-weight:800;color:#1f2937">Lý do hủy đơn hàng</div>' +
+    '<div style="padding:14px 16px">' +
+    '<p style="font-size:.84rem;color:#6b7280;margin-bottom:10px">Vui lòng nhập lý do hủy (bắt buộc):</p>' +
+    '<textarea id="adminBkCancelReasonInput" rows="4" placeholder="Nhập lý do hủy..." style="width:100%;border:1.5px solid #e5e7eb;border-radius:10px;padding:10px 12px;font-family:inherit;font-size:.85rem;resize:vertical;outline:none"></textarea>' +
+    '<div id="adminBkCancelReasonError" style="display:none;color:#dc2626;font-size:.78rem;margin-top:8px">Vui lòng nhập lý do hủy.</div>' +
+    '</div>' +
+    '<div style="display:flex;justify-content:flex-end;gap:10px;padding:12px 16px;border-top:1px solid #eef2f7">' +
+    '<button type="button" class="admin-act-btn" onclick="adminBkCloseCancelModal()">Hủy</button>' +
+    '<button type="button" class="admin-act-btn admin-act-btn-red" onclick="adminBkSubmitCancelModal()">Xác nhận hủy đơn</button>' +
+    '</div>' +
+    '</div>';
+
+  modal.addEventListener('click', function (e) {
+    if (e.target === modal) adminBkCloseCancelModal('');
+  });
+
+  document.body.appendChild(modal);
+  return modal;
+}
+
+function adminBkOpenCancelModal() {
+  var modal = adminBkEnsureCancelModal();
+  var input = document.getElementById('adminBkCancelReasonInput');
+  var err = document.getElementById('adminBkCancelReasonError');
+  if (input) input.value = '';
+  if (err) err.style.display = 'none';
+  modal.style.display = 'flex';
+  if (input) input.focus();
+
+  return new Promise(function (resolve) {
+    ADMIN_BK_CANCEL_MODAL_RESOLVE = resolve;
+  });
+}
+
+function adminBkCloseCancelModal(reason) {
+  var modal = document.getElementById('adminBkCancelModal');
+  if (modal) modal.style.display = 'none';
+  if (ADMIN_BK_CANCEL_MODAL_RESOLVE) {
+    var resolve = ADMIN_BK_CANCEL_MODAL_RESOLVE;
+    ADMIN_BK_CANCEL_MODAL_RESOLVE = null;
+    resolve(reason || '');
+  }
+}
+
+function adminBkSubmitCancelModal() {
+  var input = document.getElementById('adminBkCancelReasonInput');
+  var err = document.getElementById('adminBkCancelReasonError');
+  var reason = (input && input.value ? input.value : '').trim();
+  if (!reason) {
+    if (err) err.style.display = 'block';
+    return;
+  }
+  if (err) err.style.display = 'none';
+  adminBkCloseCancelModal(reason);
+}
+
+function adminBkEnsureDetailModal() {
+  var modal = document.getElementById('adminBookingDetailModal');
+  if (modal) return modal;
+
+  modal = document.createElement('div');
+  modal.id = 'adminBookingDetailModal';
+  modal.style.cssText = 'position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:100000;background:rgba(0,0,0,.48);padding:16px;';
+  modal.innerHTML =
+    '<div style="width:min(1040px,100%);max-height:92vh;overflow:auto;background:#fff;border-radius:18px;box-shadow:0 24px 70px rgba(0,0,0,.28)">' +
+    '<div style="padding:18px 22px;border-bottom:1px solid #eef2f7;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;background:linear-gradient(135deg,#0f3a21,#135d34);color:#fff;border-radius:18px 18px 0 0">' +
+    '<div>' +
+    '<div style="font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;opacity:.75">Chi tiết đơn hàng</div>' +
+    '<div id="adminBookingDetailHeaderCode" style="font-size:1.25rem;font-weight:800;margin-top:4px">—</div>' +
+    '<div id="adminBookingDetailHeaderMeta" style="font-size:.86rem;opacity:.85;margin-top:6px">—</div>' +
+    '</div>' +
+    '<button type="button" onclick="adminBkCloseDetailModal()" style="border:none;background:rgba(255,255,255,.12);color:#fff;width:40px;height:40px;border-radius:12px;font-size:1.3rem;cursor:pointer">×</button>' +
+    '</div>' +
+    '<div style="padding:18px 22px 22px">' +
+    '<div style="display:grid;grid-template-columns:1.2fr .95fr;gap:16px">' +
+    '<div style="display:grid;gap:16px">' +
+    '<section style="border:1px solid #edf0f3;border-radius:16px;padding:16px;background:#fff">' +
+    '<div style="font-size:.78rem;font-weight:800;color:#2b3a46;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">Thông tin tour</div>' +
+    '<div id="adminBookingDetailTour"></div>' +
+    '</section>' +
+    '<section style="border:1px solid #edf0f3;border-radius:16px;padding:16px;background:#fff">' +
+    '<div style="font-size:.78rem;font-weight:800;color:#2b3a46;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">Thông tin khách hàng</div>' +
+    '<div id="adminBookingDetailCustomer"></div>' +
+    '</section>' +
+    '</div>' +
+    '<div style="display:grid;gap:16px">' +
+    '<section style="border:1px solid #edf0f3;border-radius:16px;padding:16px;background:#fff">' +
+    '<div style="font-size:.78rem;font-weight:800;color:#2b3a46;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">Hành khách</div>' +
+    '<div id="adminBookingDetailPassengers"></div>' +
+    '</section>' +
+    '<section style="border:1px solid #edf0f3;border-radius:16px;padding:16px;background:#fff">' +
+    '<div style="font-size:.78rem;font-weight:800;color:#2b3a46;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">Chi tiết giá</div>' +
+    '<div id="adminBookingDetailPrice"></div>' +
+    '</section>' +
+    '</div>' +
+    '</div>' +
+    '<section style="border:1px solid #edf0f3;border-radius:16px;padding:16px;background:#fff;margin-top:16px">' +
+    '<div style="font-size:.78rem;font-weight:800;color:#2b3a46;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">Trạng thái và hành động</div>' +
+    '<div id="adminBookingDetailStatus"></div>' +
+    '</section>' +
+    '</div>' +
+    '</div>';
+
+  modal.addEventListener('click', function (e) {
+    if (e.target === modal) adminBkCloseDetailModal();
+  });
+
+  document.body.appendChild(modal);
+  return modal;
+}
+
+function adminBkCloseDetailModal() {
+  var modal = document.getElementById('adminBookingDetailModal');
+  if (modal) modal.style.display = 'none';
+}
+
+function adminBkEscapeHtml(value) {
+  return String(value === undefined || value === null ? '—' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function adminBkStatusBadgeText(status) {
+  var normalized = adminBkNormalizeBookingStatus(status);
+  if (normalized === 1) return '<span class="nv-badge nv-badge-processing">ĐÃ XÁC NHẬN</span>';
+  if (normalized === 2) return '<span class="nv-badge nv-badge-done">HOÀN THÀNH</span>';
+  if (normalized === 3) return '<span class="nv-badge nv-badge-urgent">ĐÃ HỦY</span>';
+  return '<span class="nv-badge nv-badge-pending">CHỜ THANH TOÁN</span>';
+}
+
+async function adminOpenBookingDetail(id) {
+  if (!id || id === '—') return;
+
+  var modal = adminBkEnsureDetailModal();
+  var headerCode = document.getElementById('adminBookingDetailHeaderCode');
+  var headerMeta = document.getElementById('adminBookingDetailHeaderMeta');
+  var tourEl = document.getElementById('adminBookingDetailTour');
+  var customerEl = document.getElementById('adminBookingDetailCustomer');
+  var passengersEl = document.getElementById('adminBookingDetailPassengers');
+  var priceEl = document.getElementById('adminBookingDetailPrice');
+  var statusEl = document.getElementById('adminBookingDetailStatus');
+
+  if (headerCode) headerCode.textContent = 'Đang tải...';
+  if (headerMeta) headerMeta.textContent = 'Vui lòng chờ trong giây lát';
+  if (tourEl) tourEl.innerHTML = '<div style="color:#888">Đang tải...</div>';
+  if (customerEl) customerEl.innerHTML = '<div style="color:#888">Đang tải...</div>';
+  if (passengersEl) passengersEl.innerHTML = '<div style="color:#888">Đang tải...</div>';
+  if (priceEl) priceEl.innerHTML = '<div style="color:#888">Đang tải...</div>';
+  if (statusEl) statusEl.innerHTML = '<div style="color:#888">Đang tải...</div>';
+
+  if (modal) modal.style.display = 'flex';
+
+  try {
+    var res = await apiAdminGetBooking(id);
+    var booking = res && res.ok && res.data && res.data.result && res.data.result.booking ? res.data.result.booking : null;
+    if (!booking) throw new Error('BOOKING_NOT_FOUND');
+
+    var statusText = adminBkGetStatusText(booking.status);
+    var paymentMethod = adminBkGetPaymentMethodText(booking);
+    var createdAt = adminBkFormatDate(booking.created_at || booking.createdAt);
+    var updatedAt = adminBkFormatDate(booking.updated_at || booking.updatedAt);
+    var tourSnapshot = booking.tour_snapshot || {};
+    var passengers = booking.passengers || {};
+    var contactInfo = booking.contact_info || {};
+    var priceRows = adminBkGetPriceDetailRows(booking);
+    var totalPassengers = adminBkGetPassengerTotal(booking);
+
+    if (headerCode) headerCode.textContent = booking.booking_code || booking.code || booking._id || '—';
+    if (headerMeta) headerMeta.textContent = 'Trạng thái: ' + statusText + ' • Ngày tạo: ' + createdAt + ' • Phương thức thanh toán: ' + paymentMethod;
+
+    if (tourEl) {
+      tourEl.innerHTML = '' +
+        '<div style="display:grid;gap:8px">' +
+        '<div style="display:flex;justify-content:space-between;gap:12px"><span style="color:#667085">Tên tour</span><strong style="text-align:right">' + adminBkEscapeHtml(tourSnapshot.tour_name || '—') + '</strong></div>' +
+        '<div style="display:flex;justify-content:space-between;gap:12px"><span style="color:#667085">Ngày đi</span><strong>' + adminBkEscapeHtml(adminBkFormatDate(tourSnapshot.departure_date)) + '</strong></div>' +
+        '<div style="display:flex;justify-content:space-between;gap:12px"><span style="color:#667085">Ngày về</span><strong>' + adminBkEscapeHtml(adminBkFormatDate(tourSnapshot.return_date)) + '</strong></div>' +
+        '<div style="display:flex;justify-content:space-between;gap:12px"><span style="color:#667085">Giá người lớn</span><strong>' + adminBkFormatMoney(tourSnapshot.price_adult) + '</strong></div>' +
+        '<div style="display:flex;justify-content:space-between;gap:12px"><span style="color:#667085">Giá trẻ em</span><strong>' + adminBkFormatMoney(tourSnapshot.price_child) + '</strong></div>' +
+        '<div style="display:flex;justify-content:space-between;gap:12px"><span style="color:#667085">Giá em bé</span><strong>' + adminBkFormatMoney(tourSnapshot.price_baby) + '</strong></div>' +
+        '</div>';
+    }
+
+    if (customerEl) {
+      customerEl.innerHTML = '' +
+        '<div style="display:grid;gap:8px">' +
+        '<div style="display:flex;justify-content:space-between;gap:12px"><span style="color:#667085">Tên khách</span><strong>' + adminBkEscapeHtml(contactInfo.full_name || '—') + '</strong></div>' +
+        '<div style="display:flex;justify-content:space-between;gap:12px"><span style="color:#667085">Email</span><strong style="text-align:right">' + adminBkEscapeHtml(contactInfo.email || '—') + '</strong></div>' +
+        '<div style="display:flex;justify-content:space-between;gap:12px"><span style="color:#667085">SĐT</span><strong>' + adminBkEscapeHtml(contactInfo.phone || '—') + '</strong></div>' +
+        '<div style="display:flex;justify-content:space-between;gap:12px"><span style="color:#667085">Cập nhật lần cuối</span><strong>' + adminBkEscapeHtml(updatedAt) + '</strong></div>' +
+        '</div>';
+    }
+
+    if (passengersEl) {
+      passengersEl.innerHTML = '' +
+        '<div style="display:grid;gap:8px">' +
+        '<div style="display:flex;justify-content:space-between;gap:12px"><span style="color:#667085">Người lớn</span><strong>' + (Number(passengers.adults || 0)) + '</strong></div>' +
+        '<div style="display:flex;justify-content:space-between;gap:12px"><span style="color:#667085">Trẻ em</span><strong>' + (Number(passengers.children || 0)) + '</strong></div>' +
+        '<div style="display:flex;justify-content:space-between;gap:12px"><span style="color:#667085">Em bé</span><strong>' + (Number(passengers.babies || 0)) + '</strong></div>' +
+        '<div style="display:flex;justify-content:space-between;gap:12px;padding-top:8px;border-top:1px solid #eef2f7"><span style="color:#667085">Tổng người</span><strong>' + totalPassengers + '</strong></div>' +
+        '</div>';
+    }
+
+    if (priceEl) {
+      var priceDetail = booking.price_detail || {};
+      priceEl.innerHTML = '' +
+        '<div style="display:grid;gap:8px">' +
+        '<div style="display:flex;justify-content:space-between;gap:12px"><span style="color:#667085">Người lớn</span><strong>' + adminBkFormatMoney(priceRows.adultTotal) + '</strong></div>' +
+        '<div style="display:flex;justify-content:space-between;gap:12px"><span style="color:#667085">Trẻ em</span><strong>' + adminBkFormatMoney(priceRows.childTotal) + '</strong></div>' +
+        '<div style="display:flex;justify-content:space-between;gap:12px"><span style="color:#667085">Em bé</span><strong>' + adminBkFormatMoney(priceRows.babyTotal) + '</strong></div>' +
+        '<div style="display:flex;justify-content:space-between;gap:12px"><span style="color:#667085">Tổng</span><strong>' + adminBkFormatMoney(priceRows.subtotal) + '</strong></div>' +
+        '<div style="display:flex;justify-content:space-between;gap:12px"><span style="color:#667085">Giảm giá (' + adminBkEscapeHtml(priceRows.couponCode) + ')</span><strong style="color:#c00">- ' + adminBkFormatMoney(priceRows.discount) + '</strong></div>' +
+        '<div style="display:flex;justify-content:space-between;gap:12px;padding-top:8px;border-top:1px solid #eef2f7"><span style="color:#667085">Thanh toán</span><strong style="color:#2d8a4e;font-size:1.05rem">' + adminBkFormatMoney(booking.final_price) + '</strong></div>' +
+        '</div>';
+    }
+
+    if (statusEl) {
+      var bookingStatus = adminBkNormalizeBookingStatus(booking.status);
+      var paymentStatus = adminBkGetPaymentStatus(booking);
+      var canConfirm = bookingStatus === 0;
+      var canComplete = bookingStatus === 1;
+      var canCancel = bookingStatus !== 2 && bookingStatus !== 3 && adminCanCancelBookings();
+      var canConfirmRefund = bookingStatus === 3 && paymentStatus === 4;
+      var statusHtml = '' +
+        '<div style="display:grid;gap:10px">' +
+        '<div style="display:flex;justify-content:space-between;gap:12px;align-items:center"><span style="color:#667085">Trạng thái hiện tại</span><span>' + adminBkStatusBadgeText(booking.status) + '</span></div>' +
+        (bookingStatus === 3 ? '<div style="display:grid;gap:8px"><div style="display:flex;justify-content:space-between;gap:12px"><span style="color:#667085">Lý do hủy</span><strong style="text-align:right;color:#b42318">' + adminBkEscapeHtml(booking.cancelled_reason || '—') + '</strong></div></div>' : '') +
+        '<div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;padding-top:4px">' +
+        (canConfirm ? '<button class="admin-act-btn admin-act-btn-green" data-id="' + (booking._id || id) + '" data-status="1" onclick="event.stopPropagation(); adminBkUpdateStatus(this)">✓ Xác nhận</button>' : '') +
+        (canComplete ? '<button class="admin-act-btn" data-id="' + (booking._id || id) + '" data-status="2" onclick="event.stopPropagation(); adminBkUpdateStatus(this)">✅ Hoàn thành</button>' : '') +
+        (canCancel ? '<button class="admin-act-btn admin-act-btn-red" data-id="' + (booking._id || id) + '" data-status="3" onclick="event.stopPropagation(); adminBkCancel(this)">✕ Hủy</button>' : '') +
+        (canConfirmRefund ? '<button class="admin-act-btn" data-id="' + (booking._id || id) + '" onclick="event.stopPropagation(); adminBkConfirmRefund(this)">💸 Đã hoàn tiền</button>' : '') +
+        '</div>' +
+        '</div>';
+      statusEl.innerHTML = statusHtml;
+    }
+  } catch (e) {
+    if (headerCode) headerCode.textContent = 'Không thể tải chi tiết booking';
+    if (headerMeta) headerMeta.textContent = 'Vui lòng thử lại sau';
+    if (tourEl) tourEl.innerHTML = '<div style="color:#b42318">Không thể tải dữ liệu booking.</div>';
+    if (customerEl) customerEl.innerHTML = '<div style="color:#b42318">Không thể tải dữ liệu booking.</div>';
+    if (passengersEl) passengersEl.innerHTML = '<div style="color:#b42318">Không thể tải dữ liệu booking.</div>';
+    if (priceEl) priceEl.innerHTML = '<div style="color:#b42318">Không thể tải dữ liệu booking.</div>';
+    if (statusEl) statusEl.innerHTML = '<div style="color:#b42318">Không thể tải dữ liệu booking.</div>';
+  }
+}
+
+async function adminBkRender() {
+  var tbody = document.getElementById('adminBkBody');
+  var footer = document.getElementById('adminBkFooter');
+  if (!tbody) return;
+
+  var search = (document.getElementById('adminBkSearch')?.value || '').trim();
+  var status = document.getElementById('adminBkStatus')?.value || '';
+
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#aaa;padding:32px">Đang tải...</td></tr>';
+
+  var bookings = [];
+
+  // Thử API GET /api/bookings
+  try {
+    var params = { page: ADMIN_BK_PAGE, limit: ADMIN_BK_PER };
+    if (search) params.keyword = search;
+    if (status) params.status = parseInt(status);
+    var res = await apiAdminGetBookings(params);
+    if (res && res.ok && res.data.result) {
+      bookings = res.data.result.bookings || res.data.result || [];
+      bookings = adminBkMergeBookingOverrides(bookings);
+      var pag = res.data.result.pagination;
+      if (pag && footer) adminBkPagination(pag.total, footer);
+    }
+  } catch (e) { }
+
+  // Fallback localStorage
+  if (!bookings.length) {
+    var db = [];
+    try { db = JSON.parse(localStorage.getItem('vt_userdb') || sessionStorage.getItem('vt_userdb') || '[]'); } catch (e) { }
+    db.forEach(function (u) {
+      try {
+        var bks = JSON.parse(localStorage.getItem('vt_bookings_' + u.email) || '[]');
+        bks.forEach(function (b) { bookings.push({ ...b, _user: u.name || u.email }); });
+      } catch (e) { }
+    });
+
+    // Filter
+    if (search) {
+      var q = search.toLowerCase();
+      bookings = bookings.filter(function (b) {
+        return (b.booking_code || b.code || '').toLowerCase().includes(q) ||
+          (b._user || '').toLowerCase().includes(q) ||
+          adminBkGetTourName(b).toLowerCase().includes(q);
+      });
+    }
+    if (status) {
+      var stMap = { '0': 'upcoming', '1': 'confirmed', '2': 'done', '3': 'cancelled' };
+      var stVal = stMap[status];
+      bookings = bookings.filter(function (b) { return (b.status || 'upcoming') === stVal; });
+    }
+
+    var total = bookings.length;
+    var start = (ADMIN_BK_PAGE - 1) * ADMIN_BK_PER;
+    bookings = bookings.slice(start, start + ADMIN_BK_PER);
+    if (footer) adminBkPagination(total, footer);
+  }
+
+  if (!bookings.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#aaa;padding:40px">Chưa có đơn hàng nào</td></tr>';
+    return;
+  }
+
+  var statusMap = {
+    0: '<span class="nv-badge nv-badge-pending">CHỜ THANH TOÁN</span>',
+    1: '<span class="nv-badge nv-badge-processing">ĐÃ XÁC NHẬN</span>',
+    2: '<span class="nv-badge nv-badge-done">HOÀN THÀNH</span>',
+    3: '<span class="nv-badge nv-badge-urgent">ĐÃ HỦY</span>',
+    upcoming: '<span class="nv-badge nv-badge-pending">SẮP DIỄN RA</span>',
+    confirmed: '<span class="nv-badge nv-badge-processing">ĐÃ XÁC NHẬN</span>',
+    done: '<span class="nv-badge nv-badge-done">HOÀN THÀNH</span>',
+    completed: '<span class="nv-badge nv-badge-done">HOÀN THÀNH</span>',
+    cancelled: '<span class="nv-badge nv-badge-urgent">ĐÃ HỦY</span>',
+  };
+
+  tbody.innerHTML = bookings.map(function (b) {
+    var id = b._id || b.code || '—';
+    var code = b.booking_code || b.code || '—';
+    var user = b._user || (b.contact_info && b.contact_info.full_name) || '—';
+    var tour = adminBkGetTourName(b);
+    var date = adminBkGetDepartureDate(b);
+    var total = adminBkGetCalculatedTotal(b);
+    var stRaw = b.status;
+    var st = adminBkNormalizeBookingStatus(stRaw);
+    var paymentStatus = adminBkGetPaymentStatus(b);
+    var badge = statusMap[stRaw] || statusMap['upcoming'];
+    var canConfirm = st === 0;
+    var canComplete = st === 1;
+    var canCancel = st !== 2 && st !== 3 && adminCanCancelBookings();
+    var canConfirmRefund = st === 3 && paymentStatus === 4;
+
+    var actions = '<div style="display:flex;gap:5px;flex-wrap:wrap">';
+    if (canConfirm) actions += '<button class="admin-act-btn admin-act-btn-green" data-id="' + id + '" data-status="1" onclick="event.stopPropagation(); adminBkUpdateStatus(this)">✓ Xác nhận</button>';
+    if (canComplete) actions += '<button class="admin-act-btn" data-id="' + id + '" data-status="2" onclick="event.stopPropagation(); adminBkUpdateStatus(this)">✅ Hoàn thành</button>';
+    if (canCancel) actions += '<button class="admin-act-btn admin-act-btn-red" data-id="' + id + '" data-status="3" onclick="event.stopPropagation(); adminBkCancel(this)">✕ Hủy</button>';
+    if (canConfirmRefund) actions += '<button class="admin-act-btn" data-id="' + id + '" onclick="event.stopPropagation(); adminBkConfirmRefund(this)">💸 Đã hoàn tiền</button>';
+    actions += '</div>';
+
+    return '<tr data-id="' + adminBkEscapeHtml(id) + '" onclick="adminOpenBookingDetail(this.dataset.id)" style="cursor:pointer">' +
+      '<td style="font-weight:700;color:#2d8a4e;font-size:0.8rem">' + code + '</td>' +
+      '<td style="font-size:0.8rem;font-weight:600">' + user + '</td>' +
+      '<td style="font-size:0.78rem;color:#555;max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + tour + '</td>' +
+      '<td style="font-size:0.78rem;color:#888;white-space:nowrap">' + date + '</td>' +
+      '<td style="font-weight:700;color:#2d8a4e;font-size:0.8rem;white-space:nowrap">' + total + '</td>' +
+      '<td>' + badge + '</td>' +
+      '<td>' + actions + '</td>' +
+      '</tr>';
+  }).join('');
+}
+
+function adminBkPagination(total, footer) {
+  var totalPages = Math.max(1, Math.ceil(total / ADMIN_BK_PER));
+  var from = total ? ((ADMIN_BK_PAGE - 1) * ADMIN_BK_PER + 1) : 0;
+  var to = total ? Math.min(ADMIN_BK_PAGE * ADMIN_BK_PER, total) : 0;
+  var pages = '';
+  for (var p = 1; p <= Math.min(totalPages, 5); p++) {
+    pages += '<button class="admin-page-btn' + (p === ADMIN_BK_PAGE ? ' active' : '') + '" onclick="ADMIN_BK_PAGE=' + p + ';adminBkRender()">' + p + '</button>';
+  }
+  footer.innerHTML =
+    '<span style="font-size:0.75rem;color:#aaa">Hiển thị ' + from + ' - ' + to + ' / ' + total + ' đơn hàng</span>' +
+    '<div class="admin-pagination">' +
+    '<button class="admin-page-btn text" onclick="if(ADMIN_BK_PAGE>1){ADMIN_BK_PAGE--;adminBkRender()}">Trước</button>' +
+    pages +
+    '<button class="admin-page-btn text" onclick="if(ADMIN_BK_PAGE<' + totalPages + '){ADMIN_BK_PAGE++;adminBkRender()}">Sau</button>' +
+    '</div>';
+}
+
+// PATCH /api/bookings/:id/status
+async function adminBkUpdateStatus(btn) {
+  var id = btn.dataset.id;
+  var status = parseInt(btn.dataset.status);
+  if (status === 3 && !adminCanCancelBookings()) {
+    showToast('❌ Nhân viên không có quyền hủy đơn hàng');
+    return;
+  }
+
+  var labels = { 1: 'xác nhận', 2: 'hoàn thành' };
+  var buttonLabel = status === 2 ? 'Hoàn thành tour' : 'Xác nhận đơn hàng';
+  var bookingConfirmed = await adminOpenConfirmModal('Xác nhận ' + (labels[status] || 'cập nhật') + ' đơn hàng này?', buttonLabel);
+  if (!bookingConfirmed) return;
+  btn.disabled = true; btn.textContent = '...';
+
+  try {
+    var res = await apiAdminUpdateBookingStatus(id, status);
+    if (res && res.ok) {
+      var updatedBooking = res.data && res.data.result && res.data.result.booking
+        ? res.data.result.booking
+        : (res.data && res.data.booking ? res.data.booking : null);
+      if (updatedBooking) adminBkRememberBooking(updatedBooking);
+      if (status === 2) {
+        showToast('✅ Đã đánh dấu tour hoàn thành');
+      } else {
+        showToast('✅ Đã xác nhận đơn hàng');
+      }
+      adminBkRender();
+      return;
+    }
+
+    showToast('❌ ' + adminBkExtractStatusErrorMessage(res, status === 2 ? 'Không thể đánh dấu tour hoàn thành' : 'Không thể xác nhận đơn hàng'));
+  } catch (e) {
+    showToast('❌ Không thể kết nối server');
+  }
+
+  btn.disabled = false;
+  btn.textContent = status === 2 ? '✅ Hoàn thành' : '✓ Xác nhận';
+  adminBkRender();
+}
+
+async function adminBkCancel(btn) {
+  if (!adminCanCancelBookings()) {
+    showToast('❌ Nhân viên không có quyền hủy đơn hàng');
+    return;
+  }
+
+  var id = btn.dataset.id;
+  var reason = await adminBkOpenCancelModal();
+  if (!reason) { showToast('⚠️ Vui lòng nhập lý do hủy'); return; }
+  btn.disabled = true; btn.textContent = '...';
+
+  try {
+    var res = await apiAdminUpdateBookingStatus(id, 3, reason);
+    if (res && res.ok) {
+      var cancelledBooking = res.data && res.data.result && res.data.result.booking
+        ? res.data.result.booking
+        : (res.data && res.data.booking ? res.data.booking : null);
+      if (cancelledBooking) adminBkRememberBooking(cancelledBooking);
+      showToast('✅ Đã hủy đơn hàng');
+      adminBkRender();
+      return;
+    }
+
+    showToast('❌ ' + adminBkExtractStatusErrorMessage(res, 'Không thể hủy đơn hàng'));
+  } catch (e) {
+    showToast('❌ Không thể kết nối server');
+  }
+
+  btn.disabled = false;
+  btn.textContent = '✕ Hủy';
+  adminBkRender();
+}
+
+async function adminBkConfirmRefund(btn) {
+  var id = btn.dataset.id;
+  var confirmed = await adminOpenConfirmModal(
+    'Xác nhận rằng booking này đã được hoàn tiền thủ công?',
+    'Đã hoàn tiền'
+  );
+  if (!confirmed) return;
+
+  btn.disabled = true;
+  btn.textContent = '...';
+
+  try {
+    var res = await apiAdminConfirmBookingRefund(id);
+    if (res && res.ok) {
+      var refundedBooking = res.data && res.data.result && res.data.result.booking
+        ? res.data.result.booking
+        : (res.data && res.data.booking ? res.data.booking : null);
+      if (refundedBooking) adminBkRememberBooking(refundedBooking);
+      showToast('✅ Đã cập nhật trạng thái hoàn tiền');
+      adminBkRender();
+      return;
+    }
+
+    showToast('❌ ' + adminBkExtractStatusErrorMessage(res, 'Không thể xác nhận hoàn tiền'));
+  } catch (e) {
+    showToast('❌ Không thể kết nối server');
+  }
+
+  btn.disabled = false;
+  btn.textContent = '💸 Đã hoàn tiền';
+  adminBkRender();
+}
+
+function adminBkUpdateLocal(idOrCode, status) {
+  var stStr = { 0: 'upcoming', 1: 'confirmed', 2: 'completed', 3: 'cancelled' }[status] || 'upcoming';
+  var db = [];
+  try { db = JSON.parse(localStorage.getItem('vt_userdb') || sessionStorage.getItem('vt_userdb') || '[]'); } catch (e) { }
+  db.forEach(function (u) {
+    var key = 'vt_bookings_' + u.email;
+    try {
+      var bks = JSON.parse(localStorage.getItem(key) || '[]');
+      var changed = false;
+      bks.forEach(function (b) {
+        if (b._id === idOrCode || b.code === idOrCode) { b.status = stStr; changed = true; }
+      });
+      if (changed) localStorage.setItem(key, JSON.stringify(bks));
+    } catch (e) { }
+  });
+}
+
+// Gọi khi switch tab
+var _origSwitchTab4 = switchTab;
+switchTab = function (name) {
+  _origSwitchTab4(name);
+  if (name === 'bookings') adminBkRender();
+};
+
+
+// ============================================================
+// DELETE TOUR – DELETE /api/tours/:id
+// ============================================================
+async function adminDeleteTour(btn) {
+  if (!adminCanDeleteTours()) {
+    showToast('❌ Nhân viên không có quyền xóa tour');
+    return;
+  }
+
+  var id = btn.dataset.id;
+  var idx = parseInt(btn.dataset.idx);
+  var tours = (Array.isArray(ADMIN_TOUR_API_CACHE) && ADMIN_TOUR_API_CACHE.length)
+    ? ADMIN_TOUR_API_CACHE
+    : adminGetTours();
+  var tour = tours[idx];
+  var name = tour ? (tour.name || 'tour này') : 'tour này';
+
+  var deleteTourConfirmed = await adminOpenConfirmModal(
+    'Xóa tour "' + name + '"? Không thể xóa nếu còn booking liên quan.',
+    'Xác nhận xóa tour'
+  );
+  if (!deleteTourConfirmed) return;
+
+  btn.disabled = true;
+  btn.textContent = '...';
+
+  // Gọi API DELETE /api/tours/:id
+  try {
+    var res = await apiAdminDeleteTour(id);
+    if (res && res.ok) {
+      showToast('Đã xóa tour: ' + name);
+      await adminRenderTours();
+      return;
+    }
+
+    var errMsg = (res && res.data && (res.data.message || res.data.error)) || 'Không thể xóa tour';
+    showToast('❌ ' + errMsg);
+  } catch (e) {
+    showToast('❌ Không thể kết nối server');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Xóa';
+  }
+}
+
+// ============================================================
+// THỐNG KÊ – Kết nối API thật
+// ============================================================
+var STATS_PERIOD = 'month';
+
+async function adminLoadStats(period) {
+  STATS_PERIOD = period || 'month';
+
+  // Map period button value sang API param
+  var periodMap = { 'today': 'today', 'week': 'week', 'month': 'month', 'year': 'year' };
+  var apiPeriod = periodMap[period] || 'month';
+
+  await Promise.all([
+    adminLoadStatsOverview(apiPeriod),
+    adminLoadStatsRevenue(apiPeriod),
+    adminLoadTopTours(apiPeriod),
+  ]);
+}
+
+// GET /api/admin/stats/overview
+async function adminLoadStatsOverview(period) {
+  try {
+    var res = await apiGetStatsOverview(period);
+    if (res && res.ok && res.data.result) {
+      var r = res.data.result;
+      var totalRevenue = Number(r.revenue ?? r.total_revenue ?? 0) || 0;
+      var refunded = Number(r.refund ?? r.total_refunded ?? r.total_refund ?? r.refunded_amount ?? r.refund_amount ?? 0) || 0;
+      var netRevenue = Number(r.net_revenue ?? (totalRevenue - refunded)) || 0;
+
+      // Doanh thu
+      var el = document.getElementById('statRevenue');
+      if (el) el.textContent = totalRevenue.toLocaleString('vi-VN') + 'đ';
+
+      var refundEl = document.getElementById('statRefunded');
+      if (refundEl) refundEl.textContent = refunded.toLocaleString('vi-VN') + 'đ';
+
+      var netRevenueEl = document.getElementById('statNetRevenue');
+      if (netRevenueEl) netRevenueEl.textContent = netRevenue.toLocaleString('vi-VN') + 'đ';
+
+      // Đơn hàng
+      var totalBookings = Number(r.bookings ?? r.total_bookings ?? 0) || 0;
+      var bk = document.getElementById('statTotalBookings');
+      if (bk) bk.textContent = totalBookings.toLocaleString('vi-VN');
+
+      // Người dùng mới
+      var newUsers = Number(r.new_users || 0) || 0;
+      var userEl = document.getElementById('statNewUsers');
+      if (userEl) userEl.textContent = newUsers.toLocaleString('vi-VN');
+
+      var cancelRate = Number(r.cancel_rate ?? r.cancellation_rate ?? 0) || 0;
+      var cancelRateEl = document.getElementById('statCancelRate');
+      if (cancelRateEl) {
+        cancelRateEl.textContent = cancelRate.toLocaleString('vi-VN') + '%';
+        adminSetCancelRateTone(cancelRateEl, cancelRate);
+      }
+
+      adminApplyOverviewBadgeRules({
+        revenue: totalRevenue,
+        refund: refunded,
+        net_revenue: netRevenue,
+        bookings: totalBookings,
+        new_users: newUsers,
+        cancel_rate: cancelRate
+      });
+
+      return;
+    }
+  } catch (e) { }
+
+  // Fallback: tính từ localStorage
+  adminLoadStatsFallback();
+}
+
+function adminSetChange(kpiId, pct) {
+  var statusMap = {
+    ok: 'OK',
+    low: 'LOW',
+    warning: 'WARNING',
+    danger: 'DANGER',
+    empty: 'EMPTY'
+  };
+  if (typeof pct === 'string') {
+    var cardS = document.getElementById(kpiId)?.closest('.stats-kpi-card');
+    if (!cardS) return;
+    var badgeS = cardS.querySelector('.stats-kpi-change');
+    if (!badgeS) return;
+    var status = String(pct || 'empty').toLowerCase();
+    if (!statusMap[status]) status = 'empty';
+    badgeS.textContent = statusMap[status];
+    badgeS.className = 'stats-kpi-change ' + status;
+    return;
+  }
+
+  var card = document.getElementById(kpiId)?.closest('.stats-kpi-card');
+  if (!card) return;
+  var badge = card.querySelector('.stats-kpi-change');
+  if (!badge) return;
+  if (pct === undefined || pct === null) { badge.textContent = '—'; badge.className = 'stats-kpi-change neutral'; return; }
+  var sign = pct >= 0 ? '+' : '';
+  badge.textContent = sign + Math.round(pct) + '%';
+  badge.className = 'stats-kpi-change ' + (pct >= 0 ? 'up' : 'down');
+}
+
+function adminApplyOverviewBadgeRules(data) {
+  var d = data || {};
+  var rules = {
+    revenue: d.revenue === 0 ? 'empty' : 'ok',
+    refund: d.refund > 0 ? 'warning' : 'ok',
+    net: d.net_revenue < 0 ? 'danger' : 'ok',
+    bookings: d.bookings === 0 ? 'empty' : (d.bookings < 3 ? 'low' : 'ok'),
+    users: d.new_users === 0 ? 'low' : 'ok',
+    cancel: d.cancel_rate > 30 ? 'danger' : (d.cancel_rate > 15 ? 'warning' : 'ok')
+  };
+
+  adminSetChange('statRevenue', rules.revenue);
+  adminSetChange('statRefunded', rules.refund);
+  adminSetChange('statNetRevenue', rules.net);
+  adminSetChange('statTotalBookings', rules.bookings);
+  adminSetChange('statNewUsers', rules.users);
+  adminSetChange('statCancelRate', rules.cancel);
+}
+
+function adminSetCancelRateTone(el, cancelRate) {
+  if (!el) return;
+  var rate = Number(cancelRate) || 0;
+  el.style.fontWeight = '800';
+  if (rate < 20) el.style.color = '#2d8a4e';
+  else if (rate <= 40) el.style.color = '#c9963a';
+  else el.style.color = '#dc2626';
+}
+
+// GET /api/admin/stats/revenue
+async function adminLoadStatsRevenue(period) {
+  try {
+    var res = await apiGetStatsRevenue(period, new Date().getFullYear());
+    var result = (res && res.ok && res.data && res.data.result) ? res.data.result : null;
+    if (result && (Array.isArray(result.chart_data) || Array.isArray(result.chart_result))) {
+      var chartData = result.chart_data || result.chart_result;
+      adminDrawRevenueChart(chartData);
+      adminDrawBookingChart(chartData);
+      return;
+    }
+  } catch (e) { }
+
+  // Fallback: tính từ localStorage bookings
+  var allBks = adminGetAllBookingsLocal();
+  if (allBks.length) adminDrawRevenueChartLocal(allBks);
+  else adminDrawRevenueChart([]);
+}
+
+function adminDrawRevenueChart(data) {
+  var canvas = document.getElementById('statsRevenueChart');
+  var empty = document.getElementById('statsRevenueEmpty');
+  var meta = document.getElementById('statsRevenueMeta');
+  if (!canvas) return;
+
+  var raw = Array.isArray(data) ? data : [];
+  var series = raw.map(function (item, idx) {
+    return {
+      date: item.date || item.period || ('Mốc ' + (idx + 1)),
+      revenue: Number(item.revenue || 0) || 0,
+      refunds: Number(item.refunds || item.refund || 0) || 0,
+      net_revenue: Number(item.net_revenue ?? item.revenue ?? 0) || 0,
+      bookings: Number(item.bookings || 0) || 0
+    };
+  });
+
+  series.sort(function (a, b) {
+    return String(a.date).localeCompare(String(b.date));
+  });
+
+  var labels = series.map(function (item) { return dashFormatShortDateLabel(item.date); });
+  var revenueData = series.map(function (item) { return item.revenue; });
+  var refundData = series.map(function (item) { return item.refunds; });
+  var netData = series.map(function (item) { return item.net_revenue; });
+
+  if (meta) meta.textContent = labels.length ? (labels[0] + ' → ' + labels[labels.length - 1]) : 'Chưa có dữ liệu';
+  if (empty) empty.style.display = series.length ? 'none' : 'flex';
+
+  if (statsRevenueChart) {
+    statsRevenueChart.destroy();
+    statsRevenueChart = null;
+  }
+
+  if (!series.length) return;
+
+  if (meta) meta.textContent = labels[0] + ' → ' + labels[labels.length - 1];
+
+  statsRevenueChart = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'Doanh thu',
+          data: revenueData,
+          tension: 0.35,
+          borderWidth: 3,
+          borderColor: '#2d8a4e',
+          pointBackgroundColor: '#2d8a4e',
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          fill: true,
+          backgroundColor: 'rgba(45, 138, 78, 0.12)'
+        },
+        {
+          label: 'Hoàn tiền',
+          data: refundData,
+          tension: 0.35,
+          borderWidth: 2,
+          borderColor: '#dc2626',
+          pointBackgroundColor: '#dc2626',
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          fill: false
+        },
+        {
+          label: 'Doanh thu ròng',
+          data: netData,
+          tension: 0.35,
+          borderWidth: 3,
+          borderColor: '#111827',
+          pointBackgroundColor: function (ctx) {
+            var y = ctx.raw;
+            return y < 0 ? '#dc2626' : '#111827';
+          },
+          pointBorderColor: function (ctx) {
+            var y = ctx.raw;
+            return y < 0 ? '#dc2626' : '#111827';
+          },
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          fill: false
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: true, position: 'bottom' },
+        tooltip: {
+          callbacks: {
+            label: function (ctx) {
+              return ctx.raw.toLocaleString('vi-VN') + 'đ';
+            },
+            afterBody: function (items) {
+              if (!items || !items.length) return '';
+              var i = items[0].dataIndex;
+              var refunds = series[i] ? series[i].refunds : 0;
+              var bookings = series[i] ? series[i].bookings : 0;
+              return [
+                'Hoàn tiền: ' + refunds.toLocaleString('vi-VN') + 'đ',
+                'Bookings: ' + bookings.toLocaleString('vi-VN')
+              ];
+            }
+          }
+        }
+      },
+      scales: {
+        y: { ticks: { callback: function (value) { return value.toLocaleString('vi-VN'); } } }
+      }
+    }
+  });
+}
+
+function adminDrawRevenueChartLocal(bookings) {
+  var local = adminBuildLocalStatsSeries(bookings || []);
+  if (local.revenueSeries.length) adminDrawRevenueChart(local.revenueSeries);
+  if (local.bookingChart.labels.length) adminDrawBookingChart(local.bookingChart);
+}
+
+function adminDrawBookingChart(chartData) {
+  var canvas = document.getElementById('statsBookingChart');
+  var empty = document.getElementById('statsBookingEmpty');
+  var meta = document.getElementById('statsBookingMeta');
+  if (!canvas) return;
+
+  var raw = [];
+  if (Array.isArray(chartData)) raw = chartData;
+  else if (chartData && Array.isArray(chartData.chart_data)) raw = chartData.chart_data;
+  else if (chartData && Array.isArray(chartData.chart_result)) raw = chartData.chart_result;
+
+  if (!raw.length && chartData && Array.isArray(chartData.labels)) {
+    raw = chartData.labels.map(function (label, idx) {
+      return {
+        date: label,
+        bookings: Number((chartData.bookings || [])[idx] || 0) || 0,
+        cancelled: Number((chartData.cancelled || [])[idx] || 0) || 0
+      };
+    });
+  }
+
+  var series = raw.map(function (item, idx) {
+    return {
+      date: item.date || item.period || ('Mốc ' + (idx + 1)),
+      bookings: Number(item.bookings || 0) || 0,
+      cancelled: Number(item.cancelled || 0) || 0
+    };
+  });
+
+  series.sort(function (a, b) {
+    return String(a.date).localeCompare(String(b.date));
+  });
+
+  var labels = series.map(function (item) { return dashFormatShortDateLabel(item.date); });
+  var bookings = series.map(function (item) { return item.bookings; });
+  var cancelled = series.map(function (item) { return item.cancelled; });
+  var hasData = labels.length > 0 && (bookings.some(function (value) { return value > 0; }) || cancelled.some(function (value) { return value > 0; }));
+
+  if (meta) meta.textContent = hasData ? (labels[0] + ' → ' + labels[labels.length - 1]) : 'Chưa có dữ liệu';
+  if (empty) empty.style.display = hasData ? 'none' : 'flex';
+
+  if (statsBookingChart) {
+    statsBookingChart.destroy();
+    statsBookingChart = null;
+  }
+
+  if (!hasData) return;
+
+  statsBookingChart = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'Thành công',
+          data: bookings,
+          backgroundColor: '#3a7abf',
+          borderRadius: 8
+        },
+        {
+          label: 'Đã hủy',
+          data: cancelled,
+          backgroundColor: '#dc2626',
+          borderRadius: 8
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          stacked: false
+        },
+        y: { beginAtZero: true, ticks: { precision: 0 } }
+      },
+      plugins: {
+        legend: { position: 'bottom' },
+        tooltip: {
+          callbacks: {
+            afterBody: function (items) {
+              if (!items || !items.length) return '';
+              var index = items[0].dataIndex;
+              var total = dashNumber(bookings[index], 0);
+              var cancel = dashNumber(cancelled[index], 0);
+              var rate = total > 0 ? (cancel / total) * 100 : 0;
+              return 'Tỷ lệ huỷ: ' + rate.toFixed(1) + '%';
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+function adminBuildLocalStatsSeries(bookings) {
+  var byMonth = {};
+  bookings.forEach(function (b) {
+    var d = (b.createdAt || b.date || '').slice(0, 7);
+    if (!d) return;
+    if (!byMonth[d]) byMonth[d] = { date: d, revenue: 0, bookings: 0, cancelled: 0 };
+    var price = parseInt(String(b.total || b.price || '0').replace(/[^0-9]/g, '')) || 0;
+    var isCancelled = b.status === 'cancelled' || b.status === 3;
+    if (isCancelled) {
+      byMonth[d].cancelled += 1;
+      return;
+    }
+    byMonth[d].revenue += price;
+    byMonth[d].bookings += 1;
+  });
+
+  var data = Object.values(byMonth || {}).sort(function (a, b) { return a.date.localeCompare(b.date); }).slice(-12);
+  return {
+    revenueSeries: data.map(function (item) {
+      return { date: item.date, revenue: item.revenue, bookings: item.bookings };
+    }),
+    bookingChart: {
+      labels: data.map(function (item) { return item.date; }),
+      revenues: data.map(function (item) { return item.revenue; }),
+      bookings: data.map(function (item) { return item.bookings; }),
+      cancelled: data.map(function (item) { return item.cancelled; })
+    }
+  };
+}
+
+// GET /api/admin/stats/top-tours
+async function adminLoadTopTours(period) {
+  var listEl = document.getElementById('statsToursList');
+  var metaEl = document.getElementById('statsTopToursMeta');
+  if (!listEl) return;
+
+  var topToursPeriod = period === 'today' ? 'week' : period;
+
+  var tours = [];
+  try {
+    var res = await apiGetTopTours(topToursPeriod, 10);
+    if (res && res.ok && res.data.result && res.data.result.tours) {
+      tours = res.data.result.tours;
+    }
+  } catch (e) { }
+
+  // Fallback từ localStorage
+  if (!tours.length) {
+    var allBks = adminGetAllBookingsLocal();
+    var tourMap = {};
+    allBks.forEach(function (b) {
+      if (b.status === 'cancelled' || b.status === 3) return; // bỏ qua đã hủy
+      var name = b.tourName || b.tour || '—';
+      if (!tourMap[name]) tourMap[name] = { name: name, booking_count: 0, revenue: 0 };
+      tourMap[name].booking_count++;
+      tourMap[name].revenue += parseInt(String(b.total || b.price || '0').replace(/[^0-9]/g, '')) || 0;
+    });
+    tours = Object.values(tourMap || {}).sort(function (a, b) { return b.booking_count - a.booking_count; }).slice(0, 10);
+  }
+
+  if (!tours.length) {
+    listEl.innerHTML = '<div class="stats-tours-empty"><p>Chưa có dữ liệu</p></div>';
+    if (metaEl) metaEl.textContent = 'Chưa có dữ liệu';
+    return;
+  }
+
+  if (metaEl) metaEl.textContent = 'Hiển thị ' + tours.length + ' tour';
+
+  listEl.innerHTML = tours.map(function (t, i) {
+    var pctVal = Number(t.percent);
+    var pctText = Number.isFinite(pctVal)
+      ? (pctVal % 1 === 0 ? pctVal.toFixed(0) : pctVal.toFixed(2)) + '%'
+      : '—';
+    return '<div class="stats-tour-row">' +
+      '<div class="stats-tour-rank">' + (i + 1) + '</div>' +
+      '<div class="stats-tour-name">' + (t.name || t.tour_id || '—') + '</div>' +
+      '<div class="stats-tour-stat">' + (t.booking_count || 0) + '</div>' +
+      '<div class="stats-tour-stat" style="color:#2d8a4e">' + (t.revenue || 0).toLocaleString('vi-VN') + 'đ</div>' +
+      '<div class="stats-tour-stat">' + pctText + '</div>' +
+      '</div>';
+  }).join('');
+}
+
+// Lấy tất cả bookings từ localStorage (fallback)
+function adminGetAllBookingsLocal() {
+  var all = [];
+  try {
+    var db = JSON.parse(localStorage.getItem('vt_userdb') || '[]');
+    db.forEach(function (u) {
+      try {
+        var bks = JSON.parse(localStorage.getItem('vt_bookings_' + u.email) || '[]');
+        all = all.concat(bks);
+      } catch (e) { }
+    });
+  } catch (e) { }
+  return all;
+}
+
+function adminGetLocalUserCount() {
+  try {
+    var db = JSON.parse(localStorage.getItem('vt_userdb') || sessionStorage.getItem('vt_userdb') || '[]');
+    return Array.isArray(db) ? db.length : 0;
+  } catch (e) {
+    return 0;
+  }
+}
+
+// Fallback stats từ localStorage
+function adminLoadStatsFallback() {
+  var all = adminGetAllBookingsLocal();
+  var users = adminGetLocalUserCount();
+  // Chỉ tính booking chưa hủy
+  var active = all.filter(function (b) { return b.status !== 'cancelled' && b.status !== 3; });
+  var grossRevenue = 0;
+  var refunded = 0;
+  active.forEach(function (b) {
+    grossRevenue += parseInt(String(b.total || b.price || '0').replace(/[^0-9]/g, '')) || 0;
+  });
+  all.forEach(function (b) {
+    refunded += parseInt(String(b.refund_amount || b.refund || '0').replace(/[^0-9]/g, '')) || 0;
+  });
+  var netRevenue = grossRevenue - refunded;
+  var cancelled = all.length - active.length;
+  var cancelRate = all.length ? (cancelled / all.length) * 100 : 0;
+  var revEl = document.getElementById('statRevenue');
+  var refundEl = document.getElementById('statRefunded');
+  var netRevenueEl = document.getElementById('statNetRevenue');
+  var bkEl = document.getElementById('statTotalBookings');
+  var userEl = document.getElementById('statNewUsers');
+  var cancelRateEl = document.getElementById('statCancelRate');
+  if (revEl) revEl.textContent = grossRevenue.toLocaleString('vi-VN') + 'đ';
+  if (refundEl) refundEl.textContent = refunded.toLocaleString('vi-VN') + 'đ';
+  if (netRevenueEl) netRevenueEl.textContent = netRevenue.toLocaleString('vi-VN') + 'đ';
+  if (bkEl) bkEl.textContent = active.length.toLocaleString('vi-VN');
+  if (userEl) userEl.textContent = users.toLocaleString('vi-VN');
+  if (cancelRateEl) {
+    cancelRateEl.textContent = cancelRate.toFixed(1) + '%';
+    adminSetCancelRateTone(cancelRateEl, cancelRate);
+  }
+
+  adminApplyOverviewBadgeRules({
+    revenue: grossRevenue,
+    refund: refunded,
+    net_revenue: netRevenue,
+    bookings: active.length,
+    new_users: users,
+    cancel_rate: cancelRate
+  });
+
+  var localSeries = adminBuildLocalStatsSeries(all);
+  if (localSeries.revenueSeries.length) adminDrawRevenueChart(localSeries.revenueSeries);
+  else adminDrawRevenueChart([]);
+  if (localSeries.bookingChart.labels.length) adminDrawBookingChart(localSeries.bookingChart);
+  else adminDrawBookingChart({ labels: [], revenues: [], bookings: [], cancelled: [] });
+}
+
+// Period buttons
+function statsPeriod(btn, val) {
+  statsSetActivePeriod(val);
+  var periodMap = { 'today': 'today', 'week': 'week', 'month': 'month', 'year': 'year' };
+  adminLoadStats(periodMap[val] || val);
+}
+
+function statsSetActivePeriod(period) {
+  var buttons = document.querySelectorAll('#tab-stats .stats-period');
+  buttons.forEach(function (b) {
+    b.classList.toggle('active', b.getAttribute('data-period') === period);
+  });
+}
+
+// Override switchTab để load stats khi mở tab
+var _origSwitchTabStats = switchTab;
+switchTab = function (name, btn) {
+  _origSwitchTabStats(name, btn);
+  if (name === 'stats') {
+    statsSetActivePeriod('today');
+    adminLoadStats('today');
+  }
+};
+
+function dashNormalizeChart(chart) {
+  let { labels, revenues, bookings, cancelled } = chart;
+
+  if (labels.length === 1) {
+    const d = new Date(labels[0]);
+    const prev = new Date(d);
+    prev.setDate(d.getDate() - 1);
+
+    const prevLabel = prev.toISOString().slice(0, 10);
+
+    labels = [prevLabel, ...labels];
+    revenues = [0, ...revenues];
+    bookings = [0, ...bookings];
+    cancelled = [0, ...cancelled];
+  }
+
+  return { labels, revenues, bookings, cancelled };
+}
+let revenueChart;
+
+function renderRevenueChart(labels, data) {
+  const ctx = document.getElementById('dashRevenueLineChart');
+  if (!ctx) return;
+  const displayLabels = (labels || []).map(dashFormatShortDateLabel);
+
+  if (revenueChart) revenueChart.destroy();
+
+  revenueChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: displayLabels,
+      datasets: [{
+        label: 'Doanh thu',
+        data,
+        tension: 0.4,
+        borderWidth: 3,
+        borderColor: '#2d8a4e',
+        pointBackgroundColor: '#2d8a4e',
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        fill: true,
+        backgroundColor: 'rgba(45, 138, 78, 0.12)'
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: function (ctx) {
+              return ctx.raw.toLocaleString('vi-VN') + 'đ';
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+let bookingChart;
+
+function renderBookingChart(labels, bookings, cancelled) {
+  const ctx = document.getElementById('dashBookingCancelChart');
+  if (!ctx) return;
+  const displayLabels = (labels || []).map(dashFormatShortDateLabel);
+  const b = bookings || [];
+  const c = cancelled || [];
+
+  if (bookingChart) bookingChart.destroy();
+
+  bookingChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: displayLabels,
+      datasets: [
+        {
+          label: 'Đặt thành công',
+          data: b,
+          backgroundColor: '#2d8a4e',
+          borderRadius: 8
+        },
+        {
+          label: 'Huỷ',
+          data: c,
+          backgroundColor: '#dc2626',
+          borderRadius: 8
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: { beginAtZero: true, ticks: { precision: 0 } }
+      },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            afterBody: function (items) {
+              if (!items || !items.length) return '';
+              var i = items[0].dataIndex;
+              var total = dashNumber(b[i], 0);
+              var cancel = dashNumber(c[i], 0);
+              var rate = total > 0 ? (cancel / total) * 100 : 0;
+              return 'Tỷ lệ huỷ: ' + rate.toFixed(1) + '%';
+            }
+          }
+        }
+      }
+    }
+  });
+}
