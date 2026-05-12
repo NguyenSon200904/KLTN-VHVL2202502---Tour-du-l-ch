@@ -45,6 +45,79 @@ function adminSettingsSaveUser(user) {
   localStorage.setItem('vt_user', JSON.stringify(user));
 }
 
+function adminResolveDisplayName(user, fallbackName) {
+  var name = String(user?.name || user?.full_name || '').trim();
+  if (name) return name;
+
+  var email = String(user?.email || '').trim();
+  if (email && email.includes('@')) return email.split('@')[0];
+
+  return fallbackName || 'Admin';
+}
+
+function adminResolveRoleLabel(user, fallbackRoleLabel) {
+  var roleNum = Number(user?.role);
+  var roleText = String(user?.role || '').toLowerCase();
+  if (roleNum === 2 || roleText === 'employee' || roleText === 'staff') return 'Nhân viên';
+  if (roleNum === 1 || roleText === 'admin') return 'Quản trị viên';
+  return fallbackRoleLabel || 'Quản trị viên';
+}
+
+function adminApplySidebarUser(user, fallbackRoleLabel, fallbackName) {
+  var sideName = document.getElementById('sideUserName');
+  var sideAvatar = document.getElementById('sideUserAvatar');
+  var roleEl = document.querySelector('.admin-user-role');
+
+  var displayName = adminResolveDisplayName(user, fallbackName);
+  var roleLabel = adminResolveRoleLabel(user, fallbackRoleLabel);
+  var avatarUrl = String(user?.avatar || '').trim();
+  var initial = (displayName || 'A').charAt(0).toUpperCase();
+
+  if (sideName) sideName.textContent = displayName;
+  if (roleEl) roleEl.textContent = roleLabel;
+
+  if (!sideAvatar) return;
+
+  if (avatarUrl) {
+    sideAvatar.style.backgroundImage = 'url(' + avatarUrl + ')';
+    sideAvatar.style.backgroundSize = 'cover';
+    sideAvatar.style.backgroundPosition = 'center';
+    sideAvatar.style.backgroundRepeat = 'no-repeat';
+    sideAvatar.textContent = '';
+    return;
+  }
+
+  sideAvatar.style.backgroundImage = '';
+  sideAvatar.textContent = initial;
+}
+
+async function adminHydrateSidebarUser(fallbackRoleLabel, fallbackName) {
+  var cached = adminSettingsLoadUser() || null;
+  if (cached) adminApplySidebarUser(cached, fallbackRoleLabel, fallbackName);
+
+  if (typeof apiGetMe !== 'function') return;
+
+  try {
+    var res = await apiGetMe();
+    if (!(res && res.ok)) return;
+
+    var me = res?.data?.result?.user || res?.data?.result || null;
+    if (!me || typeof me !== 'object') return;
+
+    var merged = {
+      ...(cached || {}),
+      ...me,
+      name: me.full_name || me.name || cached?.name || '',
+      full_name: me.full_name || me.name || cached?.full_name || '',
+      email: me.email || cached?.email || '',
+      avatar: me.avatar || cached?.avatar || ''
+    };
+
+    adminSettingsSaveUser(merged);
+    adminApplySidebarUser(merged, fallbackRoleLabel, fallbackName);
+  } catch (_) { }
+}
+
 function adminSettingsFill(user) {
   var setValue = function (id, value) {
     var el = document.getElementById(id);
@@ -1080,7 +1153,8 @@ async function adminTourSaveStatus(btn) {
   try {
     var res = await apiAdminPatchTourStatus(tourId, next);
     if (!res || !res.ok) {
-      showToast('❌ Không thể cập nhật trạng thái tour');
+      var msg = res && res.data && res.data.message ? res.data.message : '❌ Không thể cập nhật trạng thái tour';
+      showToast('❌ ' + msg);
       return;
     }
     selectEl.setAttribute('data-current', String(next));
@@ -1214,7 +1288,8 @@ async function adminToggleTourVisibility(btn) {
   try {
     var res = await apiAdminUpdateTourStatus(id, next);
     if (!res || !res.ok) {
-      showToast('❌ Không thể cập nhật trạng thái hiển thị');
+      var msg = res && res.data && res.data.message ? res.data.message : 'Không thể cập nhật trạng thái hiển thị';
+      showToast('❌ ' + msg);
       return;
     }
     showToast(next === 1 ? '✅ Đã bật hiển thị tour' : '⏸ Đã tắt hiển thị tour');
@@ -1756,7 +1831,7 @@ async function adminEditTourScheduleAdd() {
   row.id = 'adminEditScheduleCreateRow';
   row.innerHTML =
     '<td><input id="newScDepartureDate" type="date" class="admin-create-tour-line-input"></td>' +
-    '<td><input id="newScReturnDate" type="date" class="admin-create-tour-line-input"></td>' +
+    '<td style="color:#6b7280;font-size:0.78rem">Tự động</td>' +
     '<td><input id="newScPriceAdult" type="number" min="0" class="admin-create-tour-line-input" placeholder="0"></td>' +
     '<td><input id="newScPriceChild" type="number" min="0" class="admin-create-tour-line-input" placeholder="0"></td>' +
     '<td><input id="newScPriceBaby" type="number" min="0" class="admin-create-tour-line-input" placeholder="0"></td>' +
@@ -1784,7 +1859,7 @@ async function adminEditTourScheduleSaveNewRow() {
   if (!ADMIN_EDIT_TOUR_ID) return;
 
   var dep = String(document.getElementById('newScDepartureDate')?.value || '').trim();
-  var ret = String(document.getElementById('newScReturnDate')?.value || '').trim();
+  // var ret = String(document.getElementById('newScReturnDate')?.value || '').trim(); // Không cần nữa
   var pa = Number(document.getElementById('newScPriceAdult')?.value || 0);
   var pc = Number(document.getElementById('newScPriceChild')?.value || 0);
   var pb = Number(document.getElementById('newScPriceBaby')?.value || 0);
@@ -1792,8 +1867,8 @@ async function adminEditTourScheduleSaveNewRow() {
   var total = Number(document.getElementById('newScTotalSlots')?.value || 0);
   var status = Number(document.getElementById('newScStatus')?.value || 1);
 
-  if (!dep || !ret) {
-    showToast('⚠️ Vui lòng nhập ngày đi và ngày về');
+  if (!dep) {
+    showToast('⚠️ Vui lòng nhập ngày đi');
     return;
   }
   if (!isFinite(total) || total <= 0) {
@@ -1801,15 +1876,9 @@ async function adminEditTourScheduleSaveNewRow() {
     return;
   }
 
-  var dateRule = adminScheduleValidateDateInput(dep, ret);
-  if (!dateRule.ok) {
-    showToast('⚠️ ' + dateRule.message);
-    return;
-  }
-
   var payload = {
     departure_date: dep,
-    return_date: ret,
+    // return_date không gửi lên nữa
     price_adult: Math.max(0, pa),
     price_child: Math.max(0, pc),
     price_baby: Math.max(0, pb),
@@ -1822,7 +1891,8 @@ async function adminEditTourScheduleSaveNewRow() {
   try {
     var res = await apiAdminCreateSchedule(ADMIN_EDIT_TOUR_ID, payload);
     if (!res || !res.ok) {
-      showToast('❌ Không thể thêm lịch');
+      var errorMsg = adminExtractApiErrorMessage(res, ['departure_date', 'return_date', 'total_slots']);
+      showToast('❌ ' + (errorMsg || 'Không thể thêm lịch'));
       return;
     }
     showToast('✅ Đã thêm lịch khởi hành');
@@ -1866,7 +1936,7 @@ async function adminEditTourSchedulePromptEdit(idx) {
 
   row.innerHTML =
     '<td><input id="editScDepartureDate" type="date" class="admin-create-tour-line-input" value="' + adminTourDetailEscapeHtml(String(sc.departure_date || '').slice(0, 10)) + '"></td>' +
-    '<td><input id="editScReturnDate" type="date" class="admin-create-tour-line-input" value="' + adminTourDetailEscapeHtml(String(sc.return_date || '').slice(0, 10)) + '"></td>' +
+    '<td style="color:#6b7280;font-size:0.78rem">Tự động</td>' +
     '<td><input id="editScPriceAdult" type="number" min="0" class="admin-create-tour-line-input" value="' + adminTourDetailEscapeHtml(String(sc.price_adult || 0)) + '"></td>' +
     '<td><input id="editScPriceChild" type="number" min="0" class="admin-create-tour-line-input" value="' + adminTourDetailEscapeHtml(String(sc.price_child || 0)) + '"></td>' +
     '<td><input id="editScPriceBaby" type="number" min="0" class="admin-create-tour-line-input" value="' + adminTourDetailEscapeHtml(String(sc.price_baby || 0)) + '"></td>' +
@@ -1953,7 +2023,7 @@ async function adminEditTourScheduleSaveEditRow() {
 
   var status = Number(document.getElementById('editScStatus')?.value || 0);
   var dep = String(document.getElementById('editScDepartureDate')?.value || '').trim();
-  var ret = String(document.getElementById('editScReturnDate')?.value || '').trim();
+  // var ret = String(document.getElementById('editScReturnDate')?.value || '').trim(); // Không còn input ngày về
   var pa = Number(document.getElementById('editScPriceAdult')?.value || 0);
   var pc = Number(document.getElementById('editScPriceChild')?.value || 0);
   var pb = Number(document.getElementById('editScPriceBaby')?.value || 0);
@@ -1961,8 +2031,8 @@ async function adminEditTourScheduleSaveEditRow() {
   var total = Number(document.getElementById('editScTotalSlots')?.value || 0);
   var avail = Number(document.getElementById('editScAvailableSlots')?.value || 0);
 
-  if (!dep || !ret) {
-    showToast('⚠️ Vui lòng nhập ngày đi và ngày về');
+  if (!dep) {
+    showToast('⚠️ Vui lòng nhập ngày đi');
     return;
   }
   if (!isFinite(total) || total <= 0) {
@@ -1984,16 +2054,11 @@ async function adminEditTourScheduleSaveEditRow() {
     showToast('⚠️ ' + totalRule.message);
     return;
   }
-
-  var dateRule = adminScheduleValidateDateInput(dep, ret);
-  if (!dateRule.ok) {
-    showToast('⚠️ ' + dateRule.message);
-    return;
-  }
+  // Không còn kiểm tra ngày về, chỉ kiểm tra ngày đi nếu cần bổ sung validate riêng
 
   var payload = {
     departure_date: dep,
-    return_date: ret,
+    // return_date không gửi lên nữa, BE sẽ tự tính
     price_adult: Math.max(0, pa),
     price_child: Math.max(0, pc),
     price_baby: Math.max(0, pb),
@@ -2006,7 +2071,8 @@ async function adminEditTourScheduleSaveEditRow() {
   try {
     var res = await apiAdminUpdateSchedule(sid, payload);
     if (!res || !res.ok) {
-      showToast('❌ Không thể cập nhật lịch');
+      var errorMsg = adminExtractApiErrorMessage(res, ['departure_date', 'return_date', 'total_slots']);
+      showToast('❌ ' + (errorMsg || 'Không thể cập nhật lịch'));
       return;
     }
     showToast('✅ Đã cập nhật lịch');
@@ -2035,7 +2101,8 @@ async function adminEditTourScheduleDelete(idx) {
   try {
     var res = await apiAdminDeleteSchedule(sid);
     if (!res || !res.ok) {
-      showToast('❌ Không thể xóa lịch');
+      var msg = res && res.data && res.data.message ? res.data.message : 'Không thể xóa lịch';
+      showToast('❌ ' + msg);
       return;
     }
     showToast('✅ Đã xóa lịch');
@@ -2053,7 +2120,8 @@ async function adminEditTourToggleVisibility() {
   try {
     var res = await apiAdminUpdateTourStatus(ADMIN_EDIT_TOUR_ID, next);
     if (!res || !res.ok) {
-      showToast('❌ Không thể cập nhật trạng thái hiển thị');
+      var msg = res && res.data && res.data.message ? res.data.message : 'Không thể cập nhật trạng thái hiển thị';
+      showToast('❌ ' + msg);
       return;
     }
     ADMIN_EDIT_TOUR_STATUS = next;
@@ -2092,8 +2160,8 @@ function adminCreateTourEnsureModal() {
     '<div class="admin-create-tour-grid">' +
     '<div class="afp-field"><label>Tên tour <span class="admin-required">*</span></label><input id="newTourName" type="text" placeholder="Nhập tên tour"></div>' +
     '<div class="afp-field"><label>Danh mục <span class="admin-required">*</span></label><select id="newTourCategory"><option value="">Đang tải danh mục...</option></select></div>' +
-    '<div class="afp-field"><label>Điểm đến <span class="admin-required">*</span></label><input id="newTourDestination" type="text" placeholder="Ví dụ: Đà Lạt, Lâm Đồng"></div>' +
-    '<div class="afp-field"><label>Thành phố khởi hành <span class="admin-required">*</span></label><input id="newTourDepartureCity" type="text" placeholder="Ví dụ: Hồ Chí Minh"></div>' +
+    '<div class="afp-field"><label>Điểm đến <span class="admin-required">*</span></label><select id="newTourDestination"><option value="">Đang tải...</option></select></div>' +
+    '<div class="afp-field"><label>Thành phố khởi hành <span class="admin-required">*</span></label><select id="newTourDepartureCity"><option value="">Đang tải...</option></select></div>' +
     '<div class="afp-field"><label>Số ngày <span class="admin-required">*</span></label><input id="newTourDays" type="number" min="1" placeholder="4"></div>' +
     '<div class="afp-field"><label>Số đêm <span class="admin-required">*</span></label><input id="newTourNights" type="number" min="0" placeholder="3"></div>' +
     '<div class="afp-field admin-create-tour-full"><label>Mô tả</label><textarea id="newTourDescription" rows="3" placeholder="Mô tả tour..."></textarea></div>' +
@@ -2162,6 +2230,22 @@ function adminOpenCreateTourModal() {
   modal.classList.add('open');
   adminResetCreateTourForm();
   adminLoadCreateTourCategories();
+  adminLoadProvincesDropdowns();
+}
+
+// Load danh sách tỉnh/thành cho dropdown
+async function adminLoadProvincesDropdowns() {
+  const provinces = await getProvinces();
+
+  const options = provinces.map(p =>
+    `<option value="${p.name}">${p.name}</option>`
+  ).join('');
+
+  document.getElementById('newTourDestination').innerHTML =
+    '<option value="" disabled selected hidden>Chọn điểm đến</option>' + options;
+
+  document.getElementById('newTourDepartureCity').innerHTML =
+    '<option value="" disabled selected hidden>Chọn thành phố khởi hành</option>' + options;
 }
 
 async function adminOpenEditTourModalByIdx(idx) {
@@ -2189,6 +2273,7 @@ async function adminOpenEditTourModalByIdx(idx) {
   adminSetCreateTourModalMode('edit');
   adminResetCreateTourForm();
   modal.classList.add('open');
+  adminLoadProvincesDropdowns();
 
   var submitBtn = document.getElementById('adminCreateTourSubmitBtn');
   if (submitBtn) {
@@ -2225,8 +2310,12 @@ async function adminOpenEditTourModalByIdx(idx) {
     };
 
     setVal('newTourName', tour.name || '');
-    setVal('newTourDestination', tour.destination || '');
-    setVal('newTourDepartureCity', tour.departure_city || '');
+    // Format lại khi set value cho dropdown (nếu dữ liệu cũ là "Thành phố ..." hoặc "Tỉnh ...")
+    function formatProvinceName(name) {
+      return String(name || '').replace(/^(Tỉnh|Thành phố|Thành Phố|TP)\s+/i, '').trim();
+    }
+    setVal('newTourDestination', formatProvinceName(tour.destination || ''));
+    setVal('newTourDepartureCity', formatProvinceName(tour.departure_city || ''));
     setVal('newTourDays', Number(tour.duration_days || 0) || '');
     setVal('newTourNights', Number(tour.duration_nights || 0) || 0);
     setVal('newTourDescription', tour.description || '');
@@ -2494,10 +2583,19 @@ async function adminSubmitCreateTour() {
   var nights = Number(document.getElementById('newTourNights')?.value || 0);
   var description = String(document.getElementById('newTourDescription')?.value || '').trim();
 
-  if (!name || !categoryId || !destination || !departureCity || !days || days < 1 || nights < 0) {
+  if (!name || !categoryId || !destination || !departureCity) {
     showToast('⚠️ Vui lòng nhập đầy đủ các trường bắt buộc ở phần Thông tin cơ bản.');
     return;
   }
+  if (!days || days < 1) {
+    showToast('⚠️ Số ngày phải là số nguyên dương lớn hơn 0.');
+    return;
+  }
+  if (nights < 0) {
+    showToast('⚠️ Số đêm không được âm.');
+    return;
+  }
+  // Khi edit, cho phép không upload lại ảnh
   if (!isEditMode && !ADMIN_CREATE_TOUR_IMAGES.length) {
     showToast('⚠️ Vui lòng upload ít nhất 1 ảnh.');
     return;
@@ -2547,7 +2645,22 @@ async function adminSubmitCreateTour() {
       return;
     }
 
-    var msg = (res && res.data && (res.data.message || res.data.error)) || (isEditMode ? 'Không thể cập nhật tour' : 'Không thể tạo tour');
+    // Ưu tiên show message chi tiết từ BE cho days/nights cả khi edit
+    var msg = '';
+    if (res && res.data && res.data.errors) {
+      if (Array.isArray(res.data.errors) && res.data.errors.length) {
+        msg = res.data.errors.map(e => e.msg || e.message).join('\n');
+      } else if (typeof res.data.errors === 'object') {
+        // Trường hợp errors là object dạng { field: { msg: ... } }
+        msg = Object.values(res.data.errors).map(e => e.msg || e.message).join('\n');
+      }
+    }
+    if (!msg && res && res.data && (res.data.message || res.data.error)) {
+      msg = res.data.message || res.data.error;
+    }
+    if (!msg) {
+      msg = isEditMode ? 'Không thể cập nhật tour' : 'Không thể tạo tour';
+    }
     showToast('❌ ' + msg);
   } catch (e) {
     showToast('❌ Không thể kết nối server');
@@ -3927,6 +4040,7 @@ async function catToggle(id, inputEl) {
   try {
     var res = await apiAdminToggleCategory(id, nextActive);
     if (res && res.ok) {
+      showToast(nextActive ? '✅ Đã bật danh mục' : '✅ Đã tắt danh mục');
       catRender();
       return;
     }

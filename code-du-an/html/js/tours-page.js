@@ -1,3 +1,26 @@
+// ===== ĐIỂM ĐẾN: Xử lý chọn tỉnh =====
+function handleProvinceChange() {
+  const dropdown = document.getElementById('tlProvinceDropdown');
+  if (!dropdown) return;
+  const value = dropdown.value;
+  updateURLAndReload({ destination: value, page: 1 });
+}
+// ===== ĐIỂM ĐẾN: Dropdown tỉnh/thành =====
+async function loadProvincesDropdown() {
+  const dropdown = document.getElementById('tlProvinceDropdown');
+  if (!dropdown) return;
+
+  const provinces = await getProvinces();
+
+  dropdown.innerHTML =
+    '<option value="">Tất cả tỉnh/thành</option>' +
+    provinces.map(p =>
+      `<option value="${p.name}">${p.name}</option>`
+    ).join('');
+}
+
+// Tự động gọi khi trang load
+window.addEventListener('DOMContentLoaded', loadProvincesDropdown);
 // ============================================================
 // tours-page.js — Trang danh sách tour
 // ============================================================
@@ -131,6 +154,11 @@ function renderTours(tours) {
       </div>
       <div class="tour-body">
         <div class="tour-title">${name}</div>
+        <div class="tour-rating" style="margin:2px 0 6px 0;font-size:0.97em;color:#f5a623;display:flex;align-items:center;gap:4px">
+          ${typeof tour.average_rating === 'number' && tour.total_reviews > 0
+        ? `⭐ ${tour.average_rating.toFixed(1)} <span style='color:#555;font-size:0.95em'>(${tour.total_reviews} đánh giá)</span>`
+        : '⭐ — <span style="color:#888">(Chưa có đánh giá)</span>'}
+        </div>
         <div class="tour-location">📍 ${location}</div>
         ${urgency}
         <div class="tour-footer">
@@ -206,19 +234,20 @@ function handleSort() {
 }
 
 function handleFilter() {
-  const duration = document.querySelector('input[name="duration"]:checked')?.value
-  const departure_from = document.getElementById('tlStartDate')?.value
-  const departure_to = document.getElementById('tlEndDate')?.value
+  const duration = document.querySelector('input[name="duration"]:checked')?.value;
+  const departure_from = document.getElementById('tlStartDate')?.value;
+  const departure_to = document.getElementById('tlEndDate')?.value;
+  const province = document.getElementById('tlProvinceDropdown')?.value || '';
 
   // ✅ dùng radio
-  const selectedPrice = document.querySelector('input[name="price"]:checked')
+  const selectedPrice = document.querySelector('input[name="price"]:checked');
 
-  let min_price, max_price
+  let min_price, max_price;
 
   if (selectedPrice && selectedPrice.value) {
-    const [min, max] = selectedPrice.value.split('-')
-    min_price = min
-    max_price = max
+    const [min, max] = selectedPrice.value.split('-');
+    min_price = min;
+    max_price = max;
   }
 
   updateURLAndReload({
@@ -227,8 +256,9 @@ function handleFilter() {
     departure_to,
     min_price,
     max_price,
+    destination: province,
     page: 1
-  })
+  });
 }
 
 function updateURLAndReload(newParams) {
@@ -241,21 +271,18 @@ function updateURLAndReload(newParams) {
 }
 
 function resetFilters() {
-  const url = new URL(window.location)
-
-    ;['duration', 'sort', 'keyword', 'min_price', 'max_price', 'departure_from', 'departure_to'].forEach(k => url.searchParams.delete(k))
-
-  url.searchParams.set('page', '1')
-
-  window.history.pushState({}, '', url)
-
+  const url = new URL(window.location);
+  ['duration', 'sort', 'keyword', 'min_price', 'max_price', 'departure_from', 'departure_to', 'destination'].forEach(k => url.searchParams.delete(k));
+  url.searchParams.set('page', '1');
+  window.history.pushState({}, '', url);
   // reset UI
-  document.getElementById('tlSearch').value = ''
-  document.getElementById('tlSort').value = 'newest'
-  const defaultPrice = document.querySelector('input[name="price"][value=""]')
-  if (defaultPrice) defaultPrice.checked = true
-  document.getElementById('tlStartDate').value = ''
-  document.getElementById('tlEndDate').value = ''
-
-  loadTours()
+  document.getElementById('tlSearch').value = '';
+  document.getElementById('tlSort').value = 'newest';
+  const defaultPrice = document.querySelector('input[name="price"][value=""]');
+  if (defaultPrice) defaultPrice.checked = true;
+  document.getElementById('tlStartDate').value = '';
+  document.getElementById('tlEndDate').value = '';
+  const provinceDropdown = document.getElementById('tlProvinceDropdown');
+  if (provinceDropdown) provinceDropdown.value = '';
+  loadTours();
 }

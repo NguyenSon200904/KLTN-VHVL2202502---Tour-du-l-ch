@@ -323,9 +323,9 @@ body {
 }
 
 .auth2-forgot {
-  display: inline-block;
-  width: 100%;
-  text-align: right;
+  display: block;
+  width: fit-content;
+  margin-left: auto;
   margin-top: 8px;
   font-size: 0.85rem;
   color: var(--green);
@@ -350,6 +350,27 @@ body {
   font-size: 0.8rem;
   color: #c33;
   margin-bottom: 12px;
+}
+
+.fb-email-form {
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid #d5e8db;
+  border-radius: 10px;
+  background: #f7fcf9;
+}
+
+.fb-email-state {
+  animation: fadeUp .28s ease both;
+}
+
+.fb-email-state .auth2-subtitle {
+  margin-bottom: 14px;
+}
+
+.fb-email-submit {
+  margin-top: 2px;
+  font-size: 0.9rem;
 }
 
 .auth2-submit {
