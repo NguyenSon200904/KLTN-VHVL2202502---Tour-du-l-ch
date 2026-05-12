@@ -211,3 +211,26 @@ body {
   color: #bbb;
   font-size: 0.75rem;
 }
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 480px) {
+  .xv-card {
+    padding: 28px 20px;
+    border-radius: 16px;
+  }
+
+  .xv-title {
+    font-size: 1.05rem;
+  }
+
+  .xv-icon {
+    width: 64px;
+    height: 64px;
+  }
+}
+
+@media (max-width: 360px) {
+  .xv-card {
+    padding: 24px 16px;
+  }
+}

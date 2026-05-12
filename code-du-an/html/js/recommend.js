@@ -1,3 +1,7 @@
+// ============================================================
+// recommend.js — Gợi ý tour CÁ NHÂN HÓA theo hành vi người dùng
+// Phân tích: Wishlist + Lịch sử đặt tour → Top tour phù hợp nhất
+// ============================================================
 
 async function recGetTours(limit = 4) {
   try {
@@ -57,4 +61,37 @@ async function recRender(gridId) {
       </div>
     </div>`
   }).join('')
+}
+
+// ============================================================
+// KHỞI TẠO SECTION GỢI Ý
+// ============================================================
+async function initRecommendSection() {
+  const sec = document.getElementById('recSection')
+  const subtitle = document.getElementById('recSubtitle')
+  if (!sec) return
+
+  // Chỉ hiển thị khi đã đăng nhập
+  const token = localStorage.getItem('vt_access_token')
+  if (!token) { sec.style.display = 'none'; return }
+
+  // Cập nhật tiêu đề với tên người dùng
+  try {
+    const user = JSON.parse(localStorage.getItem('vt_user') || '{}')
+    if (user && user.full_name && subtitle) {
+      const firstName = user.full_name.split(' ').slice(-1)[0]
+      subtitle.textContent = `Dành riêng cho ${firstName} — dựa trên sở thích của bạn`
+    }
+  } catch (e) { }
+
+  // Render tour gợi ý
+  await recRender('recGrid')
+
+  // Kiểm tra có tour không
+  const grid = document.getElementById('recGrid')
+  if (grid && grid.children.length > 0) {
+    sec.style.display = 'block'
+  } else {
+    sec.style.display = 'none'
+  }
 }

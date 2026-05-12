@@ -118,6 +118,21 @@ function scrollDest(direction) {
   container.scrollBy({ left: direction * 220, behavior: 'smooth' })
 }
 
+// ===== WISHLIST IDs cache =====
+let _wishlistIds = new Set()
+
+async function loadWishlistIds() {
+  try {
+    const token = localStorage.getItem('vt_access_token')
+    if (!token) return
+    const res = await apiGetWishlist()
+    if (res && res.ok) {
+      const tours = res.data?.result?.tours || []
+      _wishlistIds = new Set(tours.map(t => t._id))
+    }
+  } catch (e) { }
+}
+
 // ===== LOAD TOURS =====
 async function loadTours() {
   const grid = document.getElementById('tourGrid')
@@ -230,6 +245,9 @@ function renderTours(tours) {
       <div class="tour-img">
         <div class="tour-img-inner" style="background:url('${img}') center/cover no-repeat;${!img ? 'background:linear-gradient(135deg,#2d8a4e,#3aaa62)' : ''}"></div>
         ${badge ? `<span class="tour-badge">${badge}</span>` : ''}
+<<<<<<< HEAD:code du an/js/home.js
+        <button class="tour-wishlist ${_wishlistIds.has(tour._id) ? 'liked' : ''}" onclick="event.stopPropagation();handleWishlist(this,'${tour._id}')" title="Yêu thích">${_wishlistIds.has(tour._id) ? '♥' : '♡'}</button>
+=======
         <button class="tour-wishlist ${liked ? 'liked' : ''}"
           onclick="event.stopPropagation();handleWishlist(this,'${tour._id}')"
           title="Yêu thích">
@@ -237,6 +255,7 @@ function renderTours(tours) {
             <path d="M12 21s-6.7-4.35-10-9C-1 7 2 2 7 2c2.5 0 4 1.5 5 3 1-1.5 2.5-3 5-3 5 0 8 5 5 10-3.3 4.65-10 9-10 9z"/>
           </svg>
         </button>
+>>>>>>> 22f5b1727e833f0d388adbd313a7cc5f71f58452:code-du-an/html/js/home.js
       </div>
       <div class="tour-body">
         <div class="tour-title">${name}</div>
@@ -259,15 +278,26 @@ function renderTours(tours) {
   }).join('')
 }
 
+  } catch (e) { }
+}
+
 // ===== WISHLIST =====
 async function handleWishlist(btn, tourId) {
   try {
     const res = await apiToggleWishlist(tourId)
+<<<<<<< HEAD:code du an/js/home.js
+    if (res && res.ok) {
+=======
 
     if (res.ok) {
+>>>>>>> 22f5b1727e833f0d388adbd313a7cc5f71f58452:code-du-an/html/js/home.js
       const added = res.data?.result?.added
 
       btn.classList.toggle('liked', added)
+<<<<<<< HEAD:code du an/js/home.js
+      if (added) _wishlistIds.add(tourId)
+      else _wishlistIds.delete(tourId)
+=======
 
       // update local state
       if (added) {
@@ -275,6 +305,7 @@ async function handleWishlist(btn, tourId) {
       } else {
         userWishlist = userWishlist.filter(id => id !== tourId.toString())
       }
+>>>>>>> 22f5b1727e833f0d388adbd313a7cc5f71f58452:code-du-an/html/js/home.js
     }
   } catch (e) {
     console.error(e)
